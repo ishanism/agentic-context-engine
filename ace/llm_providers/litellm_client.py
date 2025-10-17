@@ -114,6 +114,12 @@ class LiteLLMClient(LLMClient):
         if config:
             self.config = config
         else:
+            # Handle Anthropic API limitation: don't set top_p for Claude when temperature > 0
+            config_kwargs = kwargs.copy()
+            if "claude" in model.lower() and temperature > 0:
+                # Remove top_p from kwargs to avoid the Anthropic API error
+                config_kwargs.pop("top_p", None)
+
             self.config = LiteLLMConfig(
                 model=model,
                 api_key=api_key,
@@ -121,8 +127,12 @@ class LiteLLMClient(LLMClient):
                 temperature=temperature,
                 max_tokens=max_tokens,
                 fallbacks=fallbacks,
-                **kwargs,
+                **config_kwargs,
             )
+
+            # Set top_p to None for Claude models with temperature > 0
+            if "claude" in model.lower() and temperature > 0:
+                self.config.top_p = None
 
         # Set up API keys from environment if not provided
         self._setup_api_keys()
@@ -217,16 +227,19 @@ class LiteLLMClient(LLMClient):
             "messages": messages,
             "temperature": kwargs.get("temperature", self.config.temperature),
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
-            "top_p": kwargs.get("top_p", self.config.top_p),
             "timeout": kwargs.get("timeout", self.config.timeout),
             "num_retries": kwargs.get("num_retries", self.config.max_retries),
             "drop_params": True,  # Automatically drop unsupported parameters
         }
 
-        # Work around LiteLLM bug: explicitly drop top_p for Claude when temperature is set
-        # This can be removed once LiteLLM properly handles this with drop_params
+        # Only add top_p if it's not None (to avoid Anthropic API limitation)
+        top_p_value = kwargs.get("top_p", self.config.top_p)
+        if top_p_value is not None:
+            call_params["top_p"] = top_p_value
+
+        # Work around Anthropic API limitation: cannot specify both temperature and top_p
         if "claude" in self.config.model.lower() and call_params["temperature"] > 0:
-            call_params["additional_drop_params"] = ["top_p"]
+            call_params.pop("top_p", None)
 
         # Add API key if available
         if self.config.api_key:
@@ -236,11 +249,17 @@ class LiteLLMClient(LLMClient):
 
         # Filter out ACE-specific parameters and add remaining kwargs
         ace_specific_params = {"refinement_round", "max_refinement_rounds", "stream_thinking"}
+
+        # Also exclude top_p for Claude models with temperature > 0
+        excluded_params = ace_specific_params.copy()
+        if "claude" in self.config.model.lower() and call_params["temperature"] > 0:
+            excluded_params.add("top_p")
+
         call_params.update(
             {
                 k: v
                 for k, v in kwargs.items()
-                if k not in call_params and k not in ace_specific_params
+                if k not in call_params and k not in excluded_params
             }
         )
 
@@ -292,16 +311,19 @@ class LiteLLMClient(LLMClient):
             "messages": messages,
             "temperature": kwargs.get("temperature", self.config.temperature),
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
-            "top_p": kwargs.get("top_p", self.config.top_p),
             "timeout": kwargs.get("timeout", self.config.timeout),
             "num_retries": kwargs.get("num_retries", self.config.max_retries),
             "drop_params": True,  # Automatically drop unsupported parameters
         }
 
-        # Work around LiteLLM bug: explicitly drop top_p for Claude when temperature is set
-        # This can be removed once LiteLLM properly handles this with drop_params
+        # Only add top_p if it's not None (to avoid Anthropic API limitation)
+        top_p_value = kwargs.get("top_p", self.config.top_p)
+        if top_p_value is not None:
+            call_params["top_p"] = top_p_value
+
+        # Work around Anthropic API limitation: cannot specify both temperature and top_p
         if "claude" in self.config.model.lower() and call_params["temperature"] > 0:
-            call_params["additional_drop_params"] = ["top_p"]
+            call_params.pop("top_p", None)
 
         # Add API key if available
         if self.config.api_key:
@@ -311,11 +333,17 @@ class LiteLLMClient(LLMClient):
 
         # Filter out ACE-specific parameters and add remaining kwargs
         ace_specific_params = {"refinement_round", "max_refinement_rounds", "stream_thinking"}
+
+        # Also exclude top_p for Claude models with temperature > 0
+        excluded_params = ace_specific_params.copy()
+        if "claude" in self.config.model.lower() and call_params["temperature"] > 0:
+            excluded_params.add("top_p")
+
         call_params.update(
             {
                 k: v
                 for k, v in kwargs.items()
-                if k not in call_params and k not in ace_specific_params
+                if k not in call_params and k not in excluded_params
             }
         )
 
