@@ -25,6 +25,10 @@ from rich.panel import Panel
 from ace import Generator, Reflector, Curator, Playbook
 from ace.llm_providers import LiteLLMClient
 
+# Suppress LiteLLM debug messages
+import litellm
+litellm.suppress_debug_info = True
+
 console = Console()
 
 
@@ -32,6 +36,7 @@ def main():
     # Display header
     console.print("\n" + "=" * 60)
     console.print("[bold cyan]🌊 The Kayba Test - ACE Self-Learning Demo 🌊[/bold cyan]")
+    console.print("[dim]Using Claude Opus 4.1[/dim]")
     console.print("=" * 60 + "\n")
 
     # Setup - Claude Opus 4.1 for transparent reasoning
@@ -65,6 +70,7 @@ def main():
     # ACE self-reflects without external feedback
     console.print("\n[cyan]━━━ Self-Reflection Phase ━━━[/cyan]")
     console.print("[dim]ACE analyzes its own response without external feedback...[/dim]")
+    console.print("[dim]Note: ACE has no ground truth - it doesn't know if the answer is correct![/dim]")
 
     # Reflect without feedback - just based on the output
     reflection = reflector.reflect(
