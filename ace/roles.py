@@ -175,8 +175,12 @@ class Generator:
         )
         prompt = base_prompt
         last_error: Optional[Exception] = None
+
+        # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
+        llm_kwargs = {k: v for k, v in kwargs.items() if k != 'sample'}
+
         for attempt in range(self.max_retries):
-            response = self.llm.complete(prompt, **kwargs)
+            response = self.llm.complete(prompt, **llm_kwargs)
             try:
                 data = _safe_json_loads(response.text)
                 reasoning = str(data.get("reasoning", ""))
@@ -493,11 +497,15 @@ class Reflector:
         result: Optional[ReflectorOutput] = None
         prompt = base_prompt
         last_error: Optional[Exception] = None
+
+        # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
+        llm_kwargs = {k: v for k, v in kwargs.items() if k != 'sample'}
+
         for round_idx in range(max_refinement_rounds):
             prompt = base_prompt
             for attempt in range(self.max_retries):
                 response = self.llm.complete(
-                    prompt, refinement_round=round_idx, **kwargs
+                    prompt, refinement_round=round_idx, **llm_kwargs
                 )
                 try:
                     data = _safe_json_loads(response.text)
@@ -663,8 +671,12 @@ class Curator:
         )
         prompt = base_prompt
         last_error: Optional[Exception] = None
+
+        # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
+        llm_kwargs = {k: v for k, v in kwargs.items() if k != 'sample'}
+
         for attempt in range(self.max_retries):
-            response = self.llm.complete(prompt, **kwargs)
+            response = self.llm.complete(prompt, **llm_kwargs)
             try:
                 data = _safe_json_loads(response.text)
                 delta = DeltaBatch.from_json(data)
