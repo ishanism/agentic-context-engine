@@ -36,7 +36,7 @@ class BenchmarkConfig:
             data=config_dict["data"],
             preprocessing=config_dict["preprocessing"],
             metrics=config_dict["metrics"],
-            metadata=config_dict.get("metadata")
+            metadata=config_dict.get("metadata"),
         )
 
 
@@ -116,8 +116,9 @@ def get_cache_dir(benchmark_name: str) -> Path:
     cache_dir = os.getenv("BENCHMARK_CACHE_DIR")
     if not cache_dir:
         # Fall back to HuggingFace default location
-        cache_dir = os.getenv("HF_DATASETS_CACHE",
-                             os.path.expanduser("~/.cache/huggingface/datasets"))
+        cache_dir = os.getenv(
+            "HF_DATASETS_CACHE", os.path.expanduser("~/.cache/huggingface/datasets")
+        )
 
     cache_path = Path(cache_dir) / "benchmarks" / benchmark_name
     cache_path.mkdir(parents=True, exist_ok=True)

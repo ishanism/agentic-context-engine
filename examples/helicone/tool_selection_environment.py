@@ -15,6 +15,7 @@ from helicone_loader import HeliconeTrace, ConversationTurn, ToolCall
 @dataclass
 class ToolSelectionSample:
     """A sample representing a tool selection decision point"""
+
     turn_index: int
     system_prompt: str
     conversation_history: list[ConversationTurn]
@@ -53,16 +54,18 @@ class ToolSelectionEnvironment(TaskEnvironment):
         samples = []
 
         for i, turn in enumerate(self.trace.conversation):
-            if turn.role != 'assistant' or not turn.tool_calls:
+            if turn.role != "assistant" or not turn.tool_calls:
                 continue
 
             # Get conversation history up to this point
-            history = [t for t in self.trace.conversation if t.turn_index < turn.turn_index]
+            history = [
+                t for t in self.trace.conversation if t.turn_index < turn.turn_index
+            ]
 
             # Get the most recent user request
             user_request = ""
             for hist_turn in reversed(history):
-                if hist_turn.role == 'user' and hist_turn.text_content:
+                if hist_turn.role == "user" and hist_turn.text_content:
                     user_request = hist_turn.text_content[0]
                     break
 
@@ -70,7 +73,7 @@ class ToolSelectionEnvironment(TaskEnvironment):
             next_user_feedback = None
             if i + 1 < len(self.trace.conversation):
                 next_turn = self.trace.conversation[i + 1]
-                if next_turn.role == 'user' and next_turn.text_content:
+                if next_turn.role == "user" and next_turn.text_content:
                     next_user_feedback = next_turn.text_content[0]
 
             # Create sample for each tool call in this turn
@@ -83,7 +86,7 @@ class ToolSelectionEnvironment(TaskEnvironment):
                     selected_tool=tool_call.tool_name,
                     tool_input=tool_call.tool_input,
                     tool_result=tool_call.tool_result,
-                    next_user_feedback=next_user_feedback
+                    next_user_feedback=next_user_feedback,
                 )
                 samples.append(sample)
 
@@ -101,8 +104,7 @@ class ToolSelectionEnvironment(TaskEnvironment):
         """
         if self.current_sample_idx >= len(self.samples):
             return EnvironmentResult(
-                feedback="No more samples to evaluate",
-                correct=False
+                feedback="No more samples to evaluate", correct=False
             )
 
         sample = self.samples[self.current_sample_idx]
@@ -122,17 +124,20 @@ class ToolSelectionEnvironment(TaskEnvironment):
         self.current_sample_idx += 1
 
         return EnvironmentResult(
-            feedback=feedback,
-            correct=is_correct,
-            ground_truth=ground_truth
+            feedback=feedback, correct=is_correct, ground_truth=ground_truth
         )
 
     def _extract_tool_from_answer(self, answer: str) -> str:
         """Extract the tool name from the agent's response"""
         # Simple extraction - look for tool names in the answer
         known_tools = [
-            'writeFile', 'readFile', 'edit_file', 'deleteFile',
-            'get_codebase_context', 'code_check', 'install'
+            "writeFile",
+            "readFile",
+            "edit_file",
+            "deleteFile",
+            "get_codebase_context",
+            "code_check",
+            "install",
         ]
 
         answer_lower = answer.lower()
@@ -144,10 +149,7 @@ class ToolSelectionEnvironment(TaskEnvironment):
         return "unknown"
 
     def _generate_feedback(
-        self,
-        sample: ToolSelectionSample,
-        predicted_tool: str,
-        is_correct: bool
+        self, sample: ToolSelectionSample, predicted_tool: str, is_correct: bool
     ) -> str:
         """Generate detailed feedback for the tool selection"""
 
@@ -172,7 +174,9 @@ class ToolSelectionEnvironment(TaskEnvironment):
             if self._indicates_success(sample.next_user_feedback):
                 feedback += "  → User seems satisfied (positive signal)\n"
             elif self._indicates_correction(sample.next_user_feedback):
-                feedback += "  → User seems to be correcting/clarifying (negative signal)\n"
+                feedback += (
+                    "  → User seems to be correcting/clarifying (negative signal)\n"
+                )
 
         return feedback
 
@@ -191,39 +195,53 @@ class ToolSelectionEnvironment(TaskEnvironment):
         analysis = []
 
         # Pattern-based reasoning
-        if tool == 'get_codebase_context':
-            analysis.append("  - get_codebase_context is appropriate at the start to understand the project")
+        if tool == "get_codebase_context":
+            analysis.append(
+                "  - get_codebase_context is appropriate at the start to understand the project"
+            )
 
-        elif tool == 'writeFile':
+        elif tool == "writeFile":
             analysis.append("  - writeFile is used for creating new files")
             prev_tools = self._get_previous_tools(sample)
-            if 'writeFile' in prev_tools:
+            if "writeFile" in prev_tools:
                 analysis.append("  - Continuing file creation pattern from earlier")
 
-        elif tool == 'edit_file':
+        elif tool == "edit_file":
             analysis.append("  - edit_file is for modifying existing files")
             analysis.append("  - Typically used after initial file creation")
 
-        elif tool == 'readFile':
+        elif tool == "readFile":
             analysis.append("  - readFile is used to inspect existing file contents")
 
-        elif tool == 'code_check':
+        elif tool == "code_check":
             analysis.append("  - code_check validates the code for errors")
             prev_tools = self._get_previous_tools(sample)
-            write_count = prev_tools.count('writeFile') + prev_tools.count('edit_file')
+            write_count = prev_tools.count("writeFile") + prev_tools.count("edit_file")
             if write_count >= 3:
-                analysis.append(f"  - Good practice to check after {write_count} file operations")
+                analysis.append(
+                    f"  - Good practice to check after {write_count} file operations"
+                )
 
-        elif tool == 'install':
+        elif tool == "install":
             analysis.append("  - install adds new dependencies to the project")
 
-        return "\n".join(analysis) if analysis else "  - Standard tool choice for this situation"
+        return (
+            "\n".join(analysis)
+            if analysis
+            else "  - Standard tool choice for this situation"
+        )
 
     def _indicates_success(self, feedback: str) -> bool:
         """Check if user feedback indicates success"""
         positive_signals = [
-            'great', 'good', 'perfect', 'excellent', 'thanks',
-            'working', 'looks good', 'that works'
+            "great",
+            "good",
+            "perfect",
+            "excellent",
+            "thanks",
+            "working",
+            "looks good",
+            "that works",
         ]
         feedback_lower = feedback.lower()
         return any(signal in feedback_lower for signal in positive_signals)
@@ -231,8 +249,15 @@ class ToolSelectionEnvironment(TaskEnvironment):
     def _indicates_correction(self, feedback: str) -> bool:
         """Check if user feedback indicates a correction"""
         negative_signals = [
-            'actually', 'no', 'wrong', 'instead', 'fix',
-            'error', 'issue', 'problem', 'not'
+            "actually",
+            "no",
+            "wrong",
+            "instead",
+            "fix",
+            "error",
+            "issue",
+            "problem",
+            "not",
         ]
         feedback_lower = feedback.lower()
         return any(signal in feedback_lower for signal in negative_signals)
@@ -293,7 +318,7 @@ def main():
     # Data files are stored in .private/helicone/ to keep them out of the repo
     # Place your Helicone JSON export in: ../../.private/helicone/oneline.json
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    json_path = os.path.join(script_dir, '../../.private/helicone/oneline.json')
+    json_path = os.path.join(script_dir, "../../.private/helicone/oneline.json")
 
     # Load trace
     loader = HeliconeLoader(json_path)
@@ -311,7 +336,7 @@ def main():
     for i in range(min(3, env.get_num_samples())):
         print(f"\n{'=' * 80}")
         print(f"SAMPLE {i + 1}")
-        print('=' * 80)
+        print("=" * 80)
 
         question = env.format_sample_as_question(i)
         print(question)
@@ -331,5 +356,5 @@ def main():
         print(result.feedback)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

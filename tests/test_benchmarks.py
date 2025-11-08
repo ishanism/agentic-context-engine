@@ -17,6 +17,7 @@ try:
     from benchmarks.base import BenchmarkConfig, BenchmarkSample, BenchmarkEnvironment
     from benchmarks.manager import BenchmarkTaskManager
     from benchmarks.environments import GenericBenchmarkEnvironment, FiNEREnvironment
+
     BENCHMARKS_AVAILABLE = True
 except ImportError:
     BENCHMARKS_AVAILABLE = False
@@ -34,7 +35,7 @@ class TestBenchmarkConfig(unittest.TestCase):
             "data": {"source": "test", "dataset": "test_data"},
             "preprocessing": {"question_template": "{text}"},
             "metrics": [{"name": "accuracy"}],
-            "metadata": {"description": "Test benchmark"}
+            "metadata": {"description": "Test benchmark"},
         }
 
         config = BenchmarkConfig.from_dict(config_dict)
@@ -53,7 +54,7 @@ class TestBenchmarkConfig(unittest.TestCase):
             "version": "1.0",
             "data": {"source": "test"},
             "preprocessing": {},
-            "metrics": []
+            "metrics": [],
         }
 
         config = BenchmarkConfig.from_dict(config_dict)
@@ -67,9 +68,7 @@ class TestBenchmarkSample(unittest.TestCase):
     def test_benchmark_sample_creation(self):
         """Test creating BenchmarkSample with core fields."""
         sample = BenchmarkSample(
-            question="What is 2+2?",
-            ground_truth="4",
-            context="Math problem"
+            question="What is 2+2?", ground_truth="4", context="Math problem"
         )
 
         self.assertEqual(sample.question, "What is 2+2?")
@@ -78,10 +77,7 @@ class TestBenchmarkSample(unittest.TestCase):
 
     def test_benchmark_sample_defaults(self):
         """Test BenchmarkSample with minimal required fields."""
-        sample = BenchmarkSample(
-            question="Test question",
-            ground_truth="Test answer"
-        )
+        sample = BenchmarkSample(question="Test question", ground_truth="Test answer")
 
         self.assertEqual(sample.question, "Test question")
         self.assertEqual(sample.ground_truth, "Test answer")
@@ -99,20 +95,14 @@ class TestBenchmarkEnvironment(unittest.TestCase):
             version="1.0",
             data={"source": "test"},
             preprocessing={},
-            metrics=[
-                {"name": "accuracy"},
-                {"name": "f1"}
-            ]
+            metrics=[{"name": "accuracy"}, {"name": "f1"}],
         )
 
     def test_generic_environment_evaluation(self):
         """Test generic environment evaluation."""
         env = GenericBenchmarkEnvironment(self.config)
 
-        sample = Sample(
-            question="What is the capital of France?",
-            ground_truth="Paris"
-        )
+        sample = Sample(question="What is the capital of France?", ground_truth="Paris")
 
         # Mock generator output
         mock_output = Mock()
@@ -130,8 +120,7 @@ class TestBenchmarkEnvironment(unittest.TestCase):
         env = GenericBenchmarkEnvironment(self.config)
 
         sample = Sample(
-            question="What is the capital of France?",
-            ground_truth="Paris France"
+            question="What is the capital of France?", ground_truth="Paris France"
         )
 
         mock_output = Mock()
@@ -177,7 +166,7 @@ class TestFiNEREnvironment(unittest.TestCase):
             version="1.0",
             data={"source": "test"},
             preprocessing={},
-            metrics=[{"name": "f1"}, {"name": "precision"}, {"name": "recall"}]
+            metrics=[{"name": "f1"}, {"name": "precision"}, {"name": "recall"}],
         )
         self.env = FiNEREnvironment(self.config)
 
@@ -193,7 +182,9 @@ class TestFiNEREnvironment(unittest.TestCase):
 
     def test_extract_entities_text(self):
         """Test entity extraction from free text."""
-        prediction = "PERSON: John Smith\nORGANIZATION: Microsoft Corp\nLOCATION: New York"
+        prediction = (
+            "PERSON: John Smith\nORGANIZATION: Microsoft Corp\nLOCATION: New York"
+        )
 
         sample = Sample(question="Test", ground_truth="")
         entities = self.env._extract_entities(prediction, sample)
@@ -210,9 +201,11 @@ class TestFiNEREnvironment(unittest.TestCase):
         metrics = self.env._compute_ner_metrics(predicted, gold)
 
         # Only "Apple" is correctly identified
-        self.assertEqual(metrics["precision"], 1/3)  # 1 correct out of 3 predicted
-        self.assertEqual(metrics["recall"], 1/2)     # 1 correct out of 2 gold
-        self.assertAlmostEqual(metrics["f1"], 2 * (1/3) * (1/2) / ((1/3) + (1/2)), places=3)
+        self.assertEqual(metrics["precision"], 1 / 3)  # 1 correct out of 3 predicted
+        self.assertEqual(metrics["recall"], 1 / 2)  # 1 correct out of 2 gold
+        self.assertAlmostEqual(
+            metrics["f1"], 2 * (1 / 3) * (1 / 2) / ((1 / 3) + (1 / 2)), places=3
+        )
         self.assertEqual(metrics["exact_match"], 0.0)  # Not exact match
 
 
@@ -300,7 +293,7 @@ data:
 class TestBenchmarkIntegration(unittest.TestCase):
     """Integration tests for the benchmarking system."""
 
-    @patch('benchmarks.loaders.huggingface.HuggingFaceLoader.load')
+    @patch("benchmarks.loaders.huggingface.HuggingFaceLoader.load")
     def test_end_to_end_mock(self, mock_load):
         """Test end-to-end benchmark execution with mocked data."""
         if not BENCHMARKS_AVAILABLE:
@@ -308,16 +301,8 @@ class TestBenchmarkIntegration(unittest.TestCase):
 
         # Mock data
         mock_data = [
-            {
-                "question": "What is 2+2?",
-                "ground_truth": "4",
-                "context": "Simple math"
-            },
-            {
-                "question": "What is 3+3?",
-                "ground_truth": "6",
-                "context": "Simple math"
-            }
+            {"question": "What is 2+2?", "ground_truth": "4", "context": "Simple math"},
+            {"question": "What is 3+3?", "ground_truth": "6", "context": "Simple math"},
         ]
         mock_load.return_value = iter(mock_data)
 

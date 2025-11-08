@@ -38,13 +38,13 @@ class SimpleQAEnvironment(TaskEnvironment):
             feedback = "Correct!"
             score = 1.0
         else:
-            feedback = f"Expected something about '{ground_truth}', but got '{prediction}'"
+            feedback = (
+                f"Expected something about '{ground_truth}', but got '{prediction}'"
+            )
             score = 0.0
 
         return EnvironmentResult(
-            feedback=feedback,
-            ground_truth=ground_truth,
-            metrics={"score": score}
+            feedback=feedback, ground_truth=ground_truth, metrics={"score": score}
         )
 
 
@@ -226,12 +226,14 @@ def main():
     print("=" * 60)
 
     # Check for at least one API key
-    has_any_key = any([
-        os.getenv("OPENAI_API_KEY"),
-        os.getenv("ANTHROPIC_API_KEY"),
-        os.getenv("GOOGLE_API_KEY"),
-        os.getenv("COHERE_API_KEY"),
-    ])
+    has_any_key = any(
+        [
+            os.getenv("OPENAI_API_KEY"),
+            os.getenv("ANTHROPIC_API_KEY"),
+            os.getenv("GOOGLE_API_KEY"),
+            os.getenv("COHERE_API_KEY"),
+        ]
+    )
 
     if not has_any_key:
         print("\nNo API keys found!")
@@ -259,6 +261,7 @@ def main():
     # Run async example
     if os.getenv("OPENAI_API_KEY"):
         import asyncio
+
         asyncio.run(example_async())
 
     print("\n" + "=" * 60)

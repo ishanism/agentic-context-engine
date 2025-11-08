@@ -77,9 +77,7 @@ def main() -> None:
     data = load_questions(questions_path)
     print(f"Loaded {len(data)} questions from {questions_path}.")
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_path, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     text_pipe = pipeline(
         "text-generation",
         model=args.model_path,

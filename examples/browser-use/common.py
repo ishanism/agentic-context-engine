@@ -29,7 +29,7 @@ def format_result_output(
     success: bool,
     steps: int,
     error: Optional[str] = None,
-    additional_info: Optional[Dict[str, Any]] = None
+    additional_info: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Format a consistent output message for task results.
@@ -59,9 +59,7 @@ def format_result_output(
 
 
 def save_results_to_file(
-    results: Dict[str, Any],
-    filename: str,
-    directory: str = "results"
+    results: Dict[str, Any], filename: str, directory: str = "results"
 ) -> Path:
     """
     Save task results to a JSON file.
@@ -80,7 +78,7 @@ def save_results_to_file(
 
     # Save results
     filepath = results_dir / filename
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
     return filepath

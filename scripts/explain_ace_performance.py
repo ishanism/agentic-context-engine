@@ -35,71 +35,54 @@ from ace.playbook import Playbook
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     # Input modes
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--results",
-        help="Path to detailed ACE results JSON file to analyze"
+        "--results", help="Path to detailed ACE results JSON file to analyze"
     )
     group.add_argument(
-        "--live",
-        action="store_true",
-        help="Run live analysis during ACE adaptation"
+        "--live", action="store_true", help="Run live analysis during ACE adaptation"
     )
     group.add_argument(
         "--compare",
         nargs=2,
         metavar=("BASELINE", "ACE"),
-        help="Compare baseline vs ACE results (two JSON files)"
+        help="Compare baseline vs ACE results (two JSON files)",
     )
 
     # Live mode options
+    parser.add_argument("--benchmark", help="Benchmark to run for live analysis")
     parser.add_argument(
-        "--benchmark",
-        help="Benchmark to run for live analysis"
+        "--model", default="gpt-4o-mini", help="Model to use for live analysis"
     )
     parser.add_argument(
-        "--model",
-        default="gpt-4o-mini",
-        help="Model to use for live analysis"
+        "--limit", type=int, default=10, help="Number of samples for live analysis"
     )
     parser.add_argument(
-        "--limit",
-        type=int,
-        default=10,
-        help="Number of samples for live analysis"
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=2,
-        help="Number of epochs for live analysis"
+        "--epochs", type=int, default=2, help="Number of epochs for live analysis"
     )
 
     # Analysis options
     parser.add_argument(
         "--output-dir",
         default="explainability_output",
-        help="Directory for analysis outputs"
+        help="Directory for analysis outputs",
     )
     parser.add_argument(
         "--generate-html",
         action="store_true",
-        help="Generate HTML explainability report"
+        help="Generate HTML explainability report",
     )
     parser.add_argument(
         "--include-plots",
         action="store_true",
-        help="Include matplotlib plots in output"
+        help="Include matplotlib plots in output",
     )
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show detailed analysis output"
+        "--verbose", action="store_true", help="Show detailed analysis output"
     )
 
     # Focus areas
@@ -107,7 +90,7 @@ def parse_args() -> argparse.Namespace:
         "--focus",
         choices=["evolution", "attribution", "interactions", "all"],
         default="all",
-        help="Focus analysis on specific area"
+        help="Focus analysis on specific area",
     )
 
     return parser.parse_args()
@@ -115,47 +98,51 @@ def parse_args() -> argparse.Namespace:
 
 def load_ace_results(file_path: str) -> List[Dict[str, Any]]:
     """Load ACE results from JSON file."""
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         data = json.load(f)
 
-    if 'results' in data:
-        return data['results']
+    if "results" in data:
+        return data["results"]
     elif isinstance(data, list):
         return data
     else:
         raise ValueError("Unable to find results in JSON file")
 
 
-def reconstruct_step_results(results_data: List[Dict[str, Any]]) -> List[AdapterStepResult]:
+def reconstruct_step_results(
+    results_data: List[Dict[str, Any]]
+) -> List[AdapterStepResult]:
     """Reconstruct AdapterStepResult objects from JSON data."""
     step_results = []
 
     for result in results_data:
         # Reconstruct Sample
         sample = Sample(
-            question=result.get('question', ''),
-            ground_truth=result.get('ground_truth', ''),
-            metadata={'sample_id': result.get('sample_id', '')}
+            question=result.get("question", ""),
+            ground_truth=result.get("ground_truth", ""),
+            metadata={"sample_id": result.get("sample_id", "")},
         )
 
         # Reconstruct outputs (simplified)
         generator_output = GeneratorOutput(
-            reasoning=result.get('reasoning', ''),
-            final_answer=result.get('prediction', ''),
-            bullet_ids=result.get('bullet_ids', []),
-            raw=result.get('generator_raw', {})
+            reasoning=result.get("reasoning", ""),
+            final_answer=result.get("prediction", ""),
+            bullet_ids=result.get("bullet_ids", []),
+            raw=result.get("generator_raw", {}),
         )
 
         # Note: Full reconstruction would need the original objects
         # This is a simplified version for demonstration
-        step_results.append({
-            'sample': sample,
-            'generator_output': generator_output,
-            'metrics': result.get('metrics', {}),
-            'feedback': result.get('feedback', ''),
-            'reflection_raw': result.get('reflection', {}),
-            'curator_raw': result.get('curator_output', {})
-        })
+        step_results.append(
+            {
+                "sample": sample,
+                "generator_output": generator_output,
+                "metrics": result.get("metrics", {}),
+                "feedback": result.get("feedback", ""),
+                "reflection_raw": result.get("reflection", {}),
+                "curator_raw": result.get("curator_output", {}),
+            }
+        )
 
     return step_results
 
@@ -170,9 +157,9 @@ def analyze_evolution_patterns(results: List[Dict[str, Any]]) -> EvolutionTracke
     epochs_data = {}
     for result in results:
         # Try to infer epoch from sample ordering
-        sample_id = result.get('sample_id', '')
-        if 'epoch' in result:
-            epoch = result['epoch']
+        sample_id = result.get("sample_id", "")
+        if "epoch" in result:
+            epoch = result["epoch"]
         else:
             # Estimate epoch from repetition pattern
             epoch = 1  # Simplified
@@ -185,13 +172,13 @@ def analyze_evolution_patterns(results: List[Dict[str, Any]]) -> EvolutionTracke
     for epoch, epoch_results in epochs_data.items():
         for step, result in enumerate(epoch_results):
             # Create mock playbook snapshot
-            metrics = result.get('metrics', {})
+            metrics = result.get("metrics", {})
             tracker.take_snapshot(
                 playbook=Playbook(),  # Would need actual playbook state
                 epoch=epoch,
                 step=step,
                 performance_metrics=metrics,
-                context=f"Step {step} analysis"
+                context=f"Step {step} analysis",
             )
 
     return tracker
@@ -205,27 +192,30 @@ def analyze_strategy_attribution(results: List[Dict[str, Any]]) -> AttributionAn
 
     for i, result in enumerate(results):
         # Extract bullet usage if available
-        bullet_ids = result.get('bullet_ids', [])
+        bullet_ids = result.get("bullet_ids", [])
 
         # Try to extract bullet info from reflection bullet_tags if available
-        if not bullet_ids and 'reflection' in result:
-            reflection = result['reflection']
-            if isinstance(reflection, dict) and 'bullet_tags' in reflection:
-                bullet_tags = reflection['bullet_tags']
+        if not bullet_ids and "reflection" in result:
+            reflection = result["reflection"]
+            if isinstance(reflection, dict) and "bullet_tags" in reflection:
+                bullet_tags = reflection["bullet_tags"]
                 if isinstance(bullet_tags, list):
-                    bullet_ids = [tag.get('id', f'tag_{i}_{j}') for j, tag in enumerate(bullet_tags)]
+                    bullet_ids = [
+                        tag.get("id", f"tag_{i}_{j}")
+                        for j, tag in enumerate(bullet_tags)
+                    ]
 
         # Create mock bullet IDs if none available (for demonstration)
         if not bullet_ids:
-            bullet_ids = [f'strategy_{i % 3}']  # Create some variety for demo
+            bullet_ids = [f"strategy_{i % 3}"]  # Create some variety for demo
 
-        metrics = result.get('metrics', {})
-        sample_id = result.get('sample_id', f'sample_{i}')
+        metrics = result.get("metrics", {})
+        sample_id = result.get("sample_id", f"sample_{i}")
 
         # Determine success
         success = None
-        if 'f1' in metrics:
-            success = metrics['f1'] > 0.5
+        if "f1" in metrics:
+            success = metrics["f1"] > 0.5
 
         analyzer.record_bullet_usage(
             bullet_ids=bullet_ids,
@@ -233,7 +223,7 @@ def analyze_strategy_attribution(results: List[Dict[str, Any]]) -> AttributionAn
             sample_id=sample_id,
             epoch=1,  # Simplified
             step=i,
-            success=success
+            success=success,
         )
 
     return analyzer
@@ -247,31 +237,30 @@ def analyze_role_interactions(results: List[Dict[str, Any]]) -> InteractionTrace
 
     for i, result in enumerate(results):
         # Extract available interaction data
-        sample_id = result.get('sample_id', f'sample_{i}')
-        question = result.get('question', '')
-        context = result.get('context', '')
+        sample_id = result.get("sample_id", f"sample_{i}")
+        question = result.get("question", "")
+        context = result.get("context", "")
 
         # Mock interaction data (would need actual role outputs)
         generator_output = GeneratorOutput(
-            reasoning=result.get('reasoning', ''),
-            final_answer=result.get('prediction', ''),
-            bullet_ids=result.get('bullet_ids', []),
-            raw={}
+            reasoning=result.get("reasoning", ""),
+            final_answer=result.get("prediction", ""),
+            bullet_ids=result.get("bullet_ids", []),
+            raw={},
         )
 
         reflector_output = ReflectorOutput(
-            reasoning='',
-            error_identification='',
-            root_cause_analysis='',
-            correct_approach='',
-            key_insight='',
+            reasoning="",
+            error_identification="",
+            root_cause_analysis="",
+            correct_approach="",
+            key_insight="",
             bullet_tags=[],
-            raw=result.get('reflection', {})
+            raw=result.get("reflection", {}),
         )
 
         curator_output = CuratorOutput(
-            delta=None,  # Would need actual delta
-            raw=result.get('curator_output', {})
+            delta=None, raw=result.get("curator_output", {})  # Would need actual delta
         )
 
         # Record simplified interaction
@@ -292,7 +281,7 @@ def perform_comparative_analysis(baseline_file: str, ace_file: str) -> Dict[str,
         metrics_sum = {}
         count = 0
         for result in results:
-            metrics = result.get('metrics', {})
+            metrics = result.get("metrics", {})
             for metric, value in metrics.items():
                 metrics_sum[metric] = metrics_sum.get(metric, 0) + value
             count += 1
@@ -307,20 +296,22 @@ def perform_comparative_analysis(baseline_file: str, ace_file: str) -> Dict[str,
     for metric in baseline_avg:
         if metric in ace_avg:
             improvement = ace_avg[metric] - baseline_avg[metric]
-            relative_improvement = improvement / baseline_avg[metric] if baseline_avg[metric] != 0 else 0
+            relative_improvement = (
+                improvement / baseline_avg[metric] if baseline_avg[metric] != 0 else 0
+            )
             improvements[metric] = {
-                'absolute': improvement,
-                'relative': relative_improvement,
-                'baseline': baseline_avg[metric],
-                'ace': ace_avg[metric]
+                "absolute": improvement,
+                "relative": relative_improvement,
+                "baseline": baseline_avg[metric],
+                "ace": ace_avg[metric],
             }
 
     return {
-        'baseline_avg': baseline_avg,
-        'ace_avg': ace_avg,
-        'improvements': improvements,
-        'baseline_count': len(baseline_results),
-        'ace_count': len(ace_results)
+        "baseline_avg": baseline_avg,
+        "ace_avg": ace_avg,
+        "improvements": improvements,
+        "baseline_count": len(baseline_results),
+        "ace_count": len(ace_results),
     }
 
 
@@ -328,42 +319,54 @@ def generate_insights(
     evolution_tracker: Optional[EvolutionTracker] = None,
     attribution_analyzer: Optional[AttributionAnalyzer] = None,
     interaction_tracer: Optional[InteractionTracer] = None,
-    comparison: Optional[Dict] = None
+    comparison: Optional[Dict] = None,
 ) -> List[str]:
     """Generate key insights from analysis."""
     insights = []
 
     if evolution_tracker:
         summary = evolution_tracker.get_evolution_summary()
-        if summary.get('survival_rate', 0) > 0.8:
-            insights.append("🎯 High strategy survival rate indicates effective strategy curation")
-        if summary.get('bullet_growth', 0) > 10:
-            insights.append("📈 Significant strategy expansion suggests active learning")
+        if summary.get("survival_rate", 0) > 0.8:
+            insights.append(
+                "🎯 High strategy survival rate indicates effective strategy curation"
+            )
+        if summary.get("bullet_growth", 0) > 10:
+            insights.append(
+                "📈 Significant strategy expansion suggests active learning"
+            )
 
         patterns = evolution_tracker.identify_learning_patterns()
-        if patterns.get('performance_jumps'):
-            insights.append(f"⚡ {len(patterns['performance_jumps'])} performance breakthroughs detected")
+        if patterns.get("performance_jumps"):
+            insights.append(
+                f"⚡ {len(patterns['performance_jumps'])} performance breakthroughs detected"
+            )
 
     if attribution_analyzer:
         report = attribution_analyzer.generate_attribution_report()
-        top_contributors = report['top_contributors'][:3]
+        top_contributors = report["top_contributors"][:3]
         if top_contributors:
             best_strategy = top_contributors[0]
-            insights.append(f"🏆 Best strategy: {best_strategy['bullet_id']} (score: {best_strategy['attribution_score']:.3f})")
+            insights.append(
+                f"🏆 Best strategy: {best_strategy['bullet_id']} (score: {best_strategy['attribution_score']:.3f})"
+            )
 
-        synergies = report['strategy_synergies'][:3]
+        synergies = report["strategy_synergies"][:3]
         if synergies:
             insights.append(f"🤝 {len(synergies)} strong strategy synergies identified")
 
     if interaction_tracer:
         report = interaction_tracer.generate_interaction_report()
-        if report['summary']['feedback_loops_total'] > 0:
-            insights.append(f"🔄 {report['summary']['feedback_loops_total']} feedback loops detected")
+        if report["summary"]["feedback_loops_total"] > 0:
+            insights.append(
+                f"🔄 {report['summary']['feedback_loops_total']} feedback loops detected"
+            )
 
     if comparison:
-        for metric, data in comparison['improvements'].items():
-            if data['relative'] > 0.1:  # 10% improvement
-                insights.append(f"📊 {metric.upper()}: {data['relative']:+.1%} improvement over baseline")
+        for metric, data in comparison["improvements"].items():
+            if data["relative"] > 0.1:  # 10% improvement
+                insights.append(
+                    f"📊 {metric.upper()}: {data['relative']:+.1%} improvement over baseline"
+                )
 
     return insights
 
@@ -373,12 +376,12 @@ def print_summary_report(
     attribution_analyzer: Optional[AttributionAnalyzer] = None,
     interaction_tracer: Optional[InteractionTracer] = None,
     comparison: Optional[Dict] = None,
-    insights: Optional[List[str]] = None
+    insights: Optional[List[str]] = None,
 ):
     """Print a comprehensive summary report."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧠 ACE EXPLAINABILITY ANALYSIS REPORT")
-    print("="*60)
+    print("=" * 60)
 
     if evolution_tracker:
         summary = evolution_tracker.get_evolution_summary()
@@ -391,14 +394,18 @@ def print_summary_report(
         report = attribution_analyzer.generate_attribution_report()
         print(f"\n🎯 ATTRIBUTION ANALYSIS:")
         print(f"  Active Strategies: {report['summary']['active_bullets']}")
-        print(f"  Avg Attribution Score: {report['summary']['avg_attribution_score']:.3f}")
+        print(
+            f"  Avg Attribution Score: {report['summary']['avg_attribution_score']:.3f}"
+        )
         print(f"  Strategy Synergies: {len(report['strategy_synergies'])}")
 
-        top_contributors = report['top_contributors'][:5]
+        top_contributors = report["top_contributors"][:5]
         if top_contributors:
             print(f"\n🏆 TOP CONTRIBUTORS:")
             for i, contributor in enumerate(top_contributors, 1):
-                print(f"  {i}. {contributor['bullet_id'][:12]} (Score: {contributor['attribution_score']:.3f})")
+                print(
+                    f"  {i}. {contributor['bullet_id'][:12]} (Score: {contributor['attribution_score']:.3f})"
+                )
 
     if interaction_tracer:
         report = interaction_tracer.generate_interaction_report()
@@ -409,15 +416,17 @@ def print_summary_report(
 
     if comparison:
         print(f"\n📊 COMPARATIVE ANALYSIS:")
-        for metric, data in comparison['improvements'].items():
-            print(f"  {metric.upper()}: {data['baseline']:.3f} → {data['ace']:.3f} ({data['relative']:+.1%})")
+        for metric, data in comparison["improvements"].items():
+            print(
+                f"  {metric.upper()}: {data['baseline']:.3f} → {data['ace']:.3f} ({data['relative']:+.1%})"
+            )
 
     if insights:
         print(f"\n🔍 KEY INSIGHTS:")
         for insight in insights:
             print(f"  {insight}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
 
 
 def run_live_analysis(args: argparse.Namespace) -> None:
@@ -457,18 +466,24 @@ def main():
             print(f"📊 Loaded {len(results)} results from {args.results}")
 
             # Run requested analyses
-            if args.focus in ['evolution', 'all']:
+            if args.focus in ["evolution", "all"]:
                 evolution_tracker = analyze_evolution_patterns(results)
-                evolution_tracker.export_timeline(output_dir / "evolution_timeline.json")
+                evolution_tracker.export_timeline(
+                    output_dir / "evolution_timeline.json"
+                )
 
-            if args.focus in ['attribution', 'all']:
+            if args.focus in ["attribution", "all"]:
                 attribution_analyzer = analyze_strategy_attribution(results)
-                attribution_analyzer.export_analysis(output_dir / "attribution_analysis.json")
+                attribution_analyzer.export_analysis(
+                    output_dir / "attribution_analysis.json"
+                )
 
-            if args.focus in ['interactions', 'all']:
+            if args.focus in ["interactions", "all"]:
                 interaction_tracer = analyze_role_interactions(results)
                 if interaction_tracer.interactions:
-                    interaction_tracer.export_traces(output_dir / "interaction_traces.json")
+                    interaction_tracer.export_traces(
+                        output_dir / "interaction_traces.json"
+                    )
 
             print(f"✅ Analysis completed")
 
@@ -479,7 +494,11 @@ def main():
 
         # Print summary report
         print_summary_report(
-            evolution_tracker, attribution_analyzer, interaction_tracer, comparison, insights
+            evolution_tracker,
+            attribution_analyzer,
+            interaction_tracer,
+            comparison,
+            insights,
         )
 
         # Generate visualizations and HTML report if requested
@@ -490,7 +509,7 @@ def main():
                 attribution_analyzer=attribution_analyzer,
                 interaction_tracer=interaction_tracer,
                 output_path=output_dir / "explainability_report.html",
-                include_plots=args.include_plots
+                include_plots=args.include_plots,
             )
             print(f"📋 HTML report generated: {html_path}")
 
@@ -505,7 +524,9 @@ def main():
 
             if attribution_analyzer:
                 plot_path = output_dir / "attribution_analysis.png"
-                visualizer.plot_bullet_attribution(attribution_analyzer, save_path=plot_path)
+                visualizer.plot_bullet_attribution(
+                    attribution_analyzer, save_path=plot_path
+                )
                 print(f"🎯 Attribution plot saved: {plot_path}")
 
             if interaction_tracer:
@@ -519,6 +540,7 @@ def main():
         print(f"❌ Error during analysis: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 

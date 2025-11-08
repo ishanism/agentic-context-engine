@@ -23,6 +23,7 @@ from ace import (
 # Import LangChain client - will fail gracefully if not installed
 try:
     from ace.llm_providers import LangChainLiteLLMClient
+
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
@@ -49,9 +50,7 @@ class SimpleQAEnvironment(TaskEnvironment):
             score = 0.0
 
         return EnvironmentResult(
-            feedback=feedback,
-            ground_truth=ground_truth,
-            metrics={"score": score}
+            feedback=feedback, ground_truth=ground_truth, metrics={"score": score}
         )
 
 
@@ -249,6 +248,7 @@ def main():
     # Run async example
     if LANGCHAIN_AVAILABLE and os.getenv("OPENAI_API_KEY"):
         import asyncio
+
         asyncio.run(example_async_streaming())
 
     print("\n" + "=" * 60)

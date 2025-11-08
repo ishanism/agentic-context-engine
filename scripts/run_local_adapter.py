@@ -85,7 +85,9 @@ def main() -> None:
     args = parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
 
-    print(f"Loading model from {args.model_path} on GPUs {args.cuda_visible_devices}...")
+    print(
+        f"Loading model from {args.model_path} on GPUs {args.cuda_visible_devices}..."
+    )
     client = TransformersLLMClient(
         args.model_path,
         max_new_tokens=args.max_new_tokens,

@@ -49,9 +49,7 @@ class FireInvestigationEnvironment(TaskEnvironment):
     def _similarity(a: str, b: str) -> float:
         return SequenceMatcher(None, a.strip(), b.strip()).ratio()
 
-    def evaluate(
-        self, sample: QuestionSample, generator_output
-    ) -> EnvironmentResult:
+    def evaluate(self, sample: QuestionSample, generator_output) -> EnvironmentResult:
         ground_truth = sample.ground_truth or ""
         prediction = generator_output.final_answer or ""
         score = self._similarity(prediction, ground_truth)
@@ -136,8 +134,7 @@ def ensure_parent(path: Path) -> None:
 
 def summarize_results(results: Iterable[AdapterStepResult]) -> Dict[str, float]:
     scores = [
-        step.environment_result.metrics.get("similarity", 0.0)
-        for step in results
+        step.environment_result.metrics.get("similarity", 0.0) for step in results
     ]
     if not scores:
         return {"avg": 0.0, "min": 0.0, "max": 0.0}

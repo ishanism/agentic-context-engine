@@ -23,24 +23,21 @@ def get_test_forms() -> List[Dict]:
             "data": {
                 "name": "John Doe",
                 "email": "john@example.com",
-                "message": "Hello, this is a test message."
-            }
+                "message": "Hello, this is a test message.",
+            },
         },
         {
             "name": "Newsletter Signup",
-            "data": {
-                "email": "jane@example.com",
-                "name": "Jane Smith"
-            }
+            "data": {"email": "jane@example.com", "name": "Jane Smith"},
         },
         {
             "name": "User Registration",
             "data": {
                 "username": "testuser123",
                 "email": "test@example.com",
-                "password": "SecurePass123"
-            }
-        }
+                "password": "SecurePass123",
+            },
+        },
     ]
 
 
@@ -83,7 +80,11 @@ ERROR: <reason>"""
 
         # Parse result
         output = history.final_result() if hasattr(history, "final_result") else ""
-        steps = len(history.action_names()) if hasattr(history, "action_names") and history.action_names() else 0
+        steps = (
+            len(history.action_names())
+            if hasattr(history, "action_names") and history.action_names()
+            else 0
+        )
 
         # Determine status
         status = "ERROR"
@@ -94,20 +95,28 @@ ERROR: <reason>"""
             "status": status,
             "steps": steps,
             "output": output,
-            "success": status == "SUCCESS"
+            "success": status == "SUCCESS",
         }
 
     except asyncio.TimeoutError:
         # Get actual steps even on timeout - history should exist
         try:
-            steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+            steps = (
+                history.number_of_steps()
+                if "history" in locals() and hasattr(history, "number_of_steps")
+                else 0
+            )
         except:
             steps = 25  # max_steps if we can't determine
         return {"status": "ERROR", "steps": steps, "error": "Timeout", "success": False}
     except Exception as e:
         # Get actual steps even on error - history might exist
         try:
-            steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+            steps = (
+                history.number_of_steps()
+                if "history" in locals() and hasattr(history, "number_of_steps")
+                else 0
+            )
         except:
             steps = 0
         return {"status": "ERROR", "steps": steps, "error": str(e), "success": False}
@@ -141,13 +150,13 @@ def main():
         print(f"📝 [{i}/{len(forms)}] Filling: {form['name']}")
 
         # Run form fill
-        result = asyncio.run(fill_form(form['data'], headless=False))
+        result = asyncio.run(fill_form(form["data"], headless=False))
         results.append(result)
 
         # Show what happened
-        status = result['status']
-        steps = result['steps']
-        success = result['success']
+        status = result["status"]
+        steps = result["steps"]
+        success = result["success"]
 
         print(f"   📊 Result: {status} ({'✓' if success else '✗'}) in {steps} steps")
         print()
@@ -157,17 +166,21 @@ def main():
     print("📊 Results:")
 
     for i, (form, result) in enumerate(zip(forms, results), 1):
-        status = result['status']
-        steps = result['steps']
-        success = result['success']
-        print(f"[{i}] {form['name']}: {status} ({'✓' if success else '✗'}) - {steps} steps")
+        status = result["status"]
+        steps = result["steps"]
+        success = result["success"]
+        print(
+            f"[{i}] {form['name']}: {status} ({'✓' if success else '✗'}) - {steps} steps"
+        )
 
     # Summary
-    successful = sum(1 for r in results if r['success'])
-    total_steps = sum(r['steps'] for r in results)
+    successful = sum(1 for r in results if r["success"])
+    total_steps = sum(r["steps"] for r in results)
     avg_steps = total_steps / len(results) if results else 0
 
-    print(f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
+    print(
+        f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)"
+    )
     print(f"⚡ Average steps: {avg_steps:.1f}")
     print(f"🚫 No learning - same performance every time")
 

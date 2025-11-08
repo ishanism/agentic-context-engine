@@ -38,25 +38,20 @@ class MockLLMClient(LLMClient):
 
         # Detect role from prompt
         if "Generator" in prompt or "bullet_ids" in prompt:
-            response = json.dumps({
-                "reasoning": "Mock reasoning",
-                "final_answer": "This is a correct mock answer",
-                "bullet_ids": []
-            })
+            response = json.dumps(
+                {
+                    "reasoning": "Mock reasoning",
+                    "final_answer": "This is a correct mock answer",
+                    "bullet_ids": [],
+                }
+            )
         elif "Reflector" in prompt or "helpful" in prompt.lower():
-            response = json.dumps({
-                "analysis": "Mock analysis",
-                "bullet_tags": []
-            })
+            response = json.dumps({"analysis": "Mock analysis", "bullet_tags": []})
         elif "Curator" in prompt or "delta" in prompt.lower():
-            response = json.dumps({
-                "deltas": []
-            })
+            response = json.dumps({"deltas": []})
         else:
             # Generic response
-            response = json.dumps({
-                "result": "Mock result"
-            })
+            response = json.dumps({"result": "Mock result"})
 
         return LLMResponse(text=response)
 
@@ -245,8 +240,7 @@ class TestOnlineAdaptation(unittest.TestCase):
         )
 
         samples = [
-            Sample(question=f"Q{i}", context="", ground_truth="")
-            for i in range(3)
+            Sample(question=f"Q{i}", context="", ground_truth="") for i in range(3)
         ]
 
         results = adapter.run(samples, self.environment)
@@ -269,7 +263,7 @@ class TestPlaybookPersistence(unittest.TestCase):
                 section="Testing",
                 content="Test strategy",
                 bullet_id="b1",
-                metadata={"helpful": 5, "harmful": 1}
+                metadata={"helpful": 5, "harmful": 1},
             )
 
             # Save

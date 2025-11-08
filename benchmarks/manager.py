@@ -67,6 +67,7 @@ class BenchmarkTaskManager:
         # Try to import and register AppWorld loader if available
         try:
             from .loaders.appworld import AppWorldLoader
+
             self._loaders["appworld"] = AppWorldLoader()
         except ImportError:
             pass
@@ -149,11 +150,14 @@ class BenchmarkTaskManager:
         # Apply limit if specified in config
         if limit:
             import itertools
+
             data_iter = itertools.islice(data_iter, limit)
 
         return data_iter
 
-    def _get_environment_class(self, config: BenchmarkConfig) -> Type[BenchmarkEnvironment]:
+    def _get_environment_class(
+        self, config: BenchmarkConfig
+    ) -> Type[BenchmarkEnvironment]:
         """
         Determine the appropriate environment class for a benchmark.
 
@@ -166,7 +170,7 @@ class BenchmarkTaskManager:
                 FiNEREnvironment,
                 XBRLMathEnvironment,
                 AppWorldEnvironment,
-                GenericBenchmarkEnvironment
+                GenericBenchmarkEnvironment,
             )
         except ImportError:
             # Fallback to base class if environments module not available

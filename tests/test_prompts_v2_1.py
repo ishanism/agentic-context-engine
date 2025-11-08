@@ -78,21 +78,25 @@ class TestPromptsV21(unittest.TestCase):
     def test_validate_generator_output_v21(self):
         """Test v2.1 validation for generator outputs."""
         # Valid output with v2.1 fields
-        valid_output = json.dumps({
-            "reasoning": "Step 1: Analyze. Step 2: Apply. Step 3: Solve.",
-            "bullet_ids": ["bullet_001", "bullet_002"],
-            "confidence_scores": {"bullet_001": 0.9, "bullet_002": 0.85},
-            "step_validations": ["Valid", "Verified"],
-            "final_answer": "42",
-            "answer_confidence": 0.95,
-            "quality_check": {
-                "addresses_question": True,
-                "reasoning_complete": True,
-                "citations_provided": True
+        valid_output = json.dumps(
+            {
+                "reasoning": "Step 1: Analyze. Step 2: Apply. Step 3: Solve.",
+                "bullet_ids": ["bullet_001", "bullet_002"],
+                "confidence_scores": {"bullet_001": 0.9, "bullet_002": 0.85},
+                "step_validations": ["Valid", "Verified"],
+                "final_answer": "42",
+                "answer_confidence": 0.95,
+                "quality_check": {
+                    "addresses_question": True,
+                    "reasoning_complete": True,
+                    "citations_provided": True,
+                },
             }
-        })
+        )
 
-        is_valid, errors, metrics = validate_prompt_output_v2_1(valid_output, "generator")
+        is_valid, errors, metrics = validate_prompt_output_v2_1(
+            valid_output, "generator"
+        )
 
         self.assertTrue(is_valid)
         self.assertEqual(len(errors), 0)
@@ -103,37 +107,41 @@ class TestPromptsV21(unittest.TestCase):
 
     def test_validate_reflector_output_v21(self):
         """Test v2.1 validation for reflector outputs."""
-        valid_output = json.dumps({
-            "reasoning": "Analysis of generator performance.",
-            "error_identification": "Calculation error at step 3",
-            "error_location": "Step 3",
-            "root_cause_analysis": "Multiplication error",
-            "correct_approach": "Use correct multiplication",
-            "extracted_learnings": [
-                {
-                    "learning": "Verify multiplication",
-                    "atomicity_score": 0.92,
-                    "evidence": "Error at 15×20"
-                },
-                {
-                    "learning": "Check intermediate steps",
-                    "atomicity_score": 0.88,
-                    "evidence": "Step validation needed"
-                }
-            ],
-            "key_insight": "Double-check arithmetic",
-            "confidence_in_analysis": 0.95,
-            "bullet_tags": [
-                {
-                    "id": "bullet_023",
-                    "tag": "neutral",
-                    "justification": "Strategy correct, execution failed",
-                    "impact_score": 0.7
-                }
-            ]
-        })
+        valid_output = json.dumps(
+            {
+                "reasoning": "Analysis of generator performance.",
+                "error_identification": "Calculation error at step 3",
+                "error_location": "Step 3",
+                "root_cause_analysis": "Multiplication error",
+                "correct_approach": "Use correct multiplication",
+                "extracted_learnings": [
+                    {
+                        "learning": "Verify multiplication",
+                        "atomicity_score": 0.92,
+                        "evidence": "Error at 15×20",
+                    },
+                    {
+                        "learning": "Check intermediate steps",
+                        "atomicity_score": 0.88,
+                        "evidence": "Step validation needed",
+                    },
+                ],
+                "key_insight": "Double-check arithmetic",
+                "confidence_in_analysis": 0.95,
+                "bullet_tags": [
+                    {
+                        "id": "bullet_023",
+                        "tag": "neutral",
+                        "justification": "Strategy correct, execution failed",
+                        "impact_score": 0.7,
+                    }
+                ],
+            }
+        )
 
-        is_valid, errors, metrics = validate_prompt_output_v2_1(valid_output, "reflector")
+        is_valid, errors, metrics = validate_prompt_output_v2_1(
+            valid_output, "reflector"
+        )
 
         self.assertTrue(is_valid)
         self.assertEqual(len(errors), 0)
@@ -144,31 +152,33 @@ class TestPromptsV21(unittest.TestCase):
     def test_validate_curator_output_v21(self):
         """Test v2.1 validation for curator outputs."""
         # Valid output with high atomicity
-        valid_output = json.dumps({
-            "reasoning": "Adding atomic strategy",
-            "deduplication_check": {
-                "similar_bullets": ["bullet_089"],
-                "similarity_scores": {"bullet_089": 0.3},
-                "decision": "safe_to_add"
-            },
-            "operations": [
-                {
-                    "type": "ADD",
-                    "section": "optimization",
-                    "content": "Use pandas.read_csv() for CSV",
-                    "atomicity_score": 0.95,
-                    "bullet_id": "",
-                    "metadata": {"helpful": 1, "harmful": 0},
-                    "justification": "Improves performance",
-                    "evidence": "3x faster in tests"
-                }
-            ],
-            "quality_metrics": {
-                "avg_atomicity": 0.95,
-                "operations_count": 1,
-                "estimated_impact": 0.8
+        valid_output = json.dumps(
+            {
+                "reasoning": "Adding atomic strategy",
+                "deduplication_check": {
+                    "similar_bullets": ["bullet_089"],
+                    "similarity_scores": {"bullet_089": 0.3},
+                    "decision": "safe_to_add",
+                },
+                "operations": [
+                    {
+                        "type": "ADD",
+                        "section": "optimization",
+                        "content": "Use pandas.read_csv() for CSV",
+                        "atomicity_score": 0.95,
+                        "bullet_id": "",
+                        "metadata": {"helpful": 1, "harmful": 0},
+                        "justification": "Improves performance",
+                        "evidence": "3x faster in tests",
+                    }
+                ],
+                "quality_metrics": {
+                    "avg_atomicity": 0.95,
+                    "operations_count": 1,
+                    "estimated_impact": 0.8,
+                },
             }
-        })
+        )
 
         is_valid, errors, metrics = validate_prompt_output_v2_1(valid_output, "curator")
 
@@ -179,18 +189,20 @@ class TestPromptsV21(unittest.TestCase):
 
     def test_reject_low_atomicity_curator_output(self):
         """Test that low atomicity strategies are rejected."""
-        bad_output = json.dumps({
-            "reasoning": "Adding compound strategy",
-            "operations": [
-                {
-                    "type": "ADD",
-                    "section": "general",
-                    "content": "Be careful and handle errors",
-                    "atomicity_score": 0.35,  # Too low!
-                    "metadata": {"helpful": 1, "harmful": 0}
-                }
-            ]
-        })
+        bad_output = json.dumps(
+            {
+                "reasoning": "Adding compound strategy",
+                "operations": [
+                    {
+                        "type": "ADD",
+                        "section": "general",
+                        "content": "Be careful and handle errors",
+                        "atomicity_score": 0.35,  # Too low!
+                        "metadata": {"helpful": 1, "harmful": 0},
+                    }
+                ],
+            }
+        )
 
         is_valid, errors, metrics = validate_prompt_output_v2_1(bad_output, "curator")
 
@@ -256,7 +268,9 @@ class TestPromptsV21(unittest.TestCase):
         # Should still be able to get v2.0 prompts
         prompt_v20 = manager.get_generator_prompt(version="2.0")
         self.assertIsNotNone(prompt_v20)
-        self.assertNotIn("⚡ QUICK REFERENCE ⚡", prompt_v20)  # v2.0 shouldn't have this
+        self.assertNotIn(
+            "⚡ QUICK REFERENCE ⚡", prompt_v20
+        )  # v2.0 shouldn't have this
 
         # Should still be able to get v1.0 prompts
         prompt_v10 = manager.get_generator_prompt(version="1.0")
@@ -289,7 +303,8 @@ class TestPromptsV21(unittest.TestCase):
 
         # Should contain a formatted date (YYYY-MM-DD format)
         import re
-        date_pattern = r'\d{4}-\d{2}-\d{2}'
+
+        date_pattern = r"\d{4}-\d{2}-\d{2}"
         self.assertTrue(re.search(date_pattern, prompt))
 
     def test_a_b_testing_support(self):
@@ -301,7 +316,7 @@ class TestPromptsV21(unittest.TestCase):
             "question": "test question",
             "context": "test context",
             "reflection": "test reflection",
-            "current_date": "2024-01-15"
+            "current_date": "2024-01-15",
         }
 
         results = manager.compare_versions("generator", test_input)

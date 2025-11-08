@@ -88,7 +88,7 @@ class SimpleHeliconeEnvironment(TaskEnvironment):
                 "valid": is_valid,
                 "has_content": has_content,
                 "success": success,
-            }
+            },
         )
 
 
@@ -107,15 +107,17 @@ def build_response_mapping(helicone_trace) -> Dict[str, str]:
     # Iterate through conversation turns
     for turn in helicone_trace.conversation:
         # Find user questions
-        if turn.role == 'user' and turn.text_content:
+        if turn.role == "user" and turn.text_content:
             question = turn.text_content[0] if turn.text_content else ""
 
             # Find the next assistant response
             next_turn_idx = turn.turn_index + 1
             if next_turn_idx < len(helicone_trace.conversation):
                 next_turn = helicone_trace.conversation[next_turn_idx]
-                if next_turn.role == 'assistant' and next_turn.text_content:
-                    response = next_turn.text_content[0] if next_turn.text_content else ""
+                if next_turn.role == "assistant" and next_turn.text_content:
+                    response = (
+                        next_turn.text_content[0] if next_turn.text_content else ""
+                    )
 
                     if question and response:
                         responses[question] = response
@@ -136,15 +138,17 @@ def create_samples_from_trace(helicone_trace) -> list[Sample]:
     samples = []
 
     for turn in helicone_trace.conversation:
-        if turn.role == 'user' and turn.text_content:
+        if turn.role == "user" and turn.text_content:
             question = turn.text_content[0] if turn.text_content else ""
 
             # Get the next assistant response as ground truth
             next_turn_idx = turn.turn_index + 1
             if next_turn_idx < len(helicone_trace.conversation):
                 next_turn = helicone_trace.conversation[next_turn_idx]
-                if next_turn.role == 'assistant' and next_turn.text_content:
-                    ground_truth = next_turn.text_content[0] if next_turn.text_content else ""
+                if next_turn.role == "assistant" and next_turn.text_content:
+                    ground_truth = (
+                        next_turn.text_content[0] if next_turn.text_content else ""
+                    )
 
                     if question and ground_truth:
                         sample = Sample(
@@ -155,7 +159,7 @@ def create_samples_from_trace(helicone_trace) -> list[Sample]:
                                 "trace_id": helicone_trace.trace_id,
                                 "turn_index": turn.turn_index,
                                 "model": helicone_trace.model,
-                            }
+                            },
                         )
                         samples.append(sample)
 
@@ -165,9 +169,9 @@ def create_samples_from_trace(helicone_trace) -> list[Sample]:
 def main():
     """Main training loop using Helicone replay data."""
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("ACE Offline Training with Helicone Replay")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     # Configuration
     HELICONE_JSON_PATH = "../../.private/helicone/oneline.json"
@@ -251,15 +255,17 @@ def main():
     results = adapter.run(samples, environment, epochs=EPOCHS)
 
     # 7. Show results
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("📊 Training Results")
-    print("="*70)
+    print("=" * 70)
     print(f"✅ Processed {len(results)} samples")
     print(f"📚 Playbook now has {len(adapter.playbook.bullets())} learned strategies")
 
     # Calculate success metrics
     if results:
-        successful = sum(1 for r in results if r.environment_result.metrics.get('success', False))
+        successful = sum(
+            1 for r in results if r.environment_result.metrics.get("success", False)
+        )
         success_rate = (successful / len(results)) * 100
         print(f"📈 Success rate: {success_rate:.1f}% ({successful}/{len(results)})")
 
@@ -288,9 +294,9 @@ def main():
         for tool, count in sorted(tool_stats.items(), key=lambda x: x[1], reverse=True):
             print(f"   {tool}: {count} calls")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✨ Training complete!")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
 
 if __name__ == "__main__":

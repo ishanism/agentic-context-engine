@@ -20,21 +20,18 @@ class TestPlaybook(unittest.TestCase):
         self.bullet1 = self.playbook.add_bullet(
             section="general",
             content="Always be clear",
-            metadata={"helpful": 5, "harmful": 0}
+            metadata={"helpful": 5, "harmful": 0},
         )
 
         self.bullet2 = self.playbook.add_bullet(
             section="math",
             content="Show your work",
-            metadata={"helpful": 3, "harmful": 1}
+            metadata={"helpful": 3, "harmful": 1},
         )
 
     def test_add_bullet(self):
         """Test adding bullets to playbook."""
-        bullet = self.playbook.add_bullet(
-            section="test",
-            content="Test content"
-        )
+        bullet = self.playbook.add_bullet(section="test", content="Test content")
 
         self.assertIsNotNone(bullet)
         self.assertEqual(bullet.section, "test")
@@ -44,9 +41,7 @@ class TestPlaybook(unittest.TestCase):
     def test_update_bullet(self):
         """Test updating existing bullet."""
         updated = self.playbook.update_bullet(
-            self.bullet1.id,
-            content="Updated content",
-            metadata={"helpful": 10}
+            self.bullet1.id, content="Updated content", metadata={"helpful": 10}
         )
 
         self.assertIsNotNone(updated)
@@ -72,24 +67,20 @@ class TestPlaybook(unittest.TestCase):
         delta = DeltaBatch(
             reasoning="Test delta operations",
             operations=[
-                DeltaOperation(
-                    type="ADD",
-                    section="new",
-                    content="New strategy"
-                ),
+                DeltaOperation(type="ADD", section="new", content="New strategy"),
                 DeltaOperation(
                     type="UPDATE",
                     section="",  # Section is required but not used for UPDATE
                     bullet_id=self.bullet1.id,
-                    content="Modified content"
+                    content="Modified content",
                 ),
                 DeltaOperation(
                     type="TAG",
                     section="",  # Section is required but not used for TAG
                     bullet_id=self.bullet2.id,
-                    metadata={"harmful": 2}
+                    metadata={"harmful": 2},
                 ),
-            ]
+            ],
         )
 
         self.playbook.apply_delta(delta)
@@ -129,7 +120,7 @@ class TestPlaybook(unittest.TestCase):
 
     def test_save_to_file(self):
         """Test saving playbook to file."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             temp_path = f.name
 
         try:
@@ -140,7 +131,7 @@ class TestPlaybook(unittest.TestCase):
             self.assertTrue(os.path.exists(temp_path))
 
             # Verify content is valid JSON
-            with open(temp_path, 'r') as f:
+            with open(temp_path, "r") as f:
                 data = json.load(f)
 
             self.assertIn("bullets", data)
@@ -154,7 +145,7 @@ class TestPlaybook(unittest.TestCase):
 
     def test_load_from_file(self):
         """Test loading playbook from file."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             temp_path = f.name
 
         try:
@@ -209,7 +200,7 @@ class TestPlaybook(unittest.TestCase):
 
     def test_load_invalid_json(self):
         """Test loading invalid JSON raises appropriate error."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             f.write("not valid json {")
             temp_path = f.name
 
@@ -243,7 +234,7 @@ class TestPlaybook(unittest.TestCase):
         """Test that empty playbook can be saved and loaded."""
         empty = Playbook()
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             temp_path = f.name
 
         try:

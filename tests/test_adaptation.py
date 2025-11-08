@@ -19,7 +19,9 @@ class SimpleQAEnvironment(TaskEnvironment):
         ground_truth = sample.ground_truth or ""
         prediction = generator_output.final_answer
         correct = prediction.strip().lower() == ground_truth.strip().lower()
-        feedback = "correct" if correct else f"expected {ground_truth} but got {prediction}"
+        feedback = (
+            "correct" if correct else f"expected {ground_truth} but got {prediction}"
+        )
         return EnvironmentResult(
             feedback=feedback,
             ground_truth=ground_truth,
@@ -90,9 +92,7 @@ class OfflineAdapterTest(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].generator_output.final_answer, "42")
         self.assertGreaterEqual(playbook.stats()["sections"], 1)
-        self.assertTrue(
-            any("life" in bullet.content for bullet in playbook.bullets())
-        )
+        self.assertTrue(any("life" in bullet.content for bullet in playbook.bullets()))
 
 
 if __name__ == "__main__":

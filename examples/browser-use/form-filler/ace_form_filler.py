@@ -39,7 +39,9 @@ class FormFillEnvironment(TaskEnvironment):
         """Run browser automation and evaluate the result."""
 
         # Extract form data from sample
-        form_data = eval(sample.context)  # Simple eval for demo - in production use proper parsing
+        form_data = eval(
+            sample.context
+        )  # Simple eval for demo - in production use proper parsing
 
         # Get strategy from generator
         strategy = generator_output.final_answer
@@ -48,14 +50,14 @@ class FormFillEnvironment(TaskEnvironment):
         result = asyncio.run(self._fill_form(form_data, strategy))
 
         # Evaluate success and efficiency
-        success = result['status'] == "SUCCESS"
-        efficient = result['steps'] <= 12
+        success = result["status"] == "SUCCESS"
+        efficient = result["steps"] <= 12
 
         feedback = f"Form filling {'succeeded' if success else 'failed'}. "
         feedback += f"Took {result['steps']} steps. "
         if not efficient:
             feedback += "Should be more efficient (target: ≤12 steps). "
-        if result['status'] == "ERROR":
+        if result["status"] == "ERROR":
             feedback += f"Error: {result.get('error', 'Unknown error')}. "
 
         return EnvironmentResult(
@@ -64,9 +66,9 @@ class FormFillEnvironment(TaskEnvironment):
             metrics={
                 "success": success,
                 "efficient": efficient,
-                "steps": result['steps'],
-                "status": result['status']
-            }
+                "steps": result["steps"],
+                "status": result["status"],
+            },
         )
 
     async def _fill_form(self, form_data: Dict, strategy: str):
@@ -110,30 +112,38 @@ ERROR: <reason>"""
 
             # Parse result
             output = history.final_result() if hasattr(history, "final_result") else ""
-            steps = len(history.action_names()) if hasattr(history, "action_names") and history.action_names() else 0
+            steps = (
+                len(history.action_names())
+                if hasattr(history, "action_names") and history.action_names()
+                else 0
+            )
 
             # Determine status
             status = "ERROR"
             if "SUCCESS:" in output.upper():
                 status = "SUCCESS"
 
-            return {
-                "status": status,
-                "steps": steps,
-                "output": output
-            }
+            return {"status": status, "steps": steps, "output": output}
 
         except asyncio.TimeoutError:
             # Get actual steps even on timeout - history should exist
             try:
-                steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+                steps = (
+                    history.number_of_steps()
+                    if "history" in locals() and hasattr(history, "number_of_steps")
+                    else 0
+                )
             except:
                 steps = 25  # max_steps if we can't determine
             return {"status": "ERROR", "steps": steps, "error": "Timeout"}
         except Exception as e:
             # Get actual steps even on error - history might exist
             try:
-                steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+                steps = (
+                    history.number_of_steps()
+                    if "history" in locals() and hasattr(history, "number_of_steps")
+                    else 0
+                )
             except:
                 steps = 0
             return {"status": "ERROR", "steps": steps, "error": str(e)}
@@ -153,24 +163,21 @@ def get_test_forms() -> List[Dict]:
             "data": {
                 "name": "John Doe",
                 "email": "john@example.com",
-                "message": "Hello, this is a test message."
-            }
+                "message": "Hello, this is a test message.",
+            },
         },
         {
             "name": "Newsletter Signup",
-            "data": {
-                "email": "jane@example.com",
-                "name": "Jane Smith"
-            }
+            "data": {"email": "jane@example.com", "name": "Jane Smith"},
         },
         {
             "name": "User Registration",
             "data": {
                 "username": "testuser123",
                 "email": "test@example.com",
-                "password": "SecurePass123"
-            }
-        }
+                "password": "SecurePass123",
+            },
+        },
     ]
 
 
@@ -207,8 +214,7 @@ def main():
 
     # Create environment
     environment = FormFillEnvironment(
-        headless=False,  # Change to True for headless mode
-        model="gpt-4o-mini"
+        headless=False, model="gpt-4o-mini"  # Change to True for headless mode
     )
 
     print("\n🔄 Starting incremental ACE learning...\n")
@@ -216,11 +222,13 @@ def main():
     # Create all samples
     samples = []
     for form in forms:
-        samples.append(Sample(
-            question=f"Fill out {form['name']} form",
-            ground_truth="SUCCESS",
-            context=str(form['data'])  # Simple string representation for demo
-        ))
+        samples.append(
+            Sample(
+                question=f"Fill out {form['name']} form",
+                ground_truth="SUCCESS",
+                context=str(form["data"]),  # Simple string representation for demo
+            )
+        )
 
     # Run OnlineAdapter - it processes samples one by one and learns after each!
     results = adapter.run(samples, environment)
@@ -231,18 +239,24 @@ def main():
 
     for i, (form, result) in enumerate(zip(forms, results), 1):
         metrics = result.environment_result.metrics
-        status = metrics.get('status', 'UNKNOWN')
-        steps = metrics.get('steps', 0)
-        success = metrics.get('success', False)
+        status = metrics.get("status", "UNKNOWN")
+        steps = metrics.get("steps", 0)
+        success = metrics.get("success", False)
 
-        print(f"[{i}] {form['name']}: {status} ({'✓' if success else '✗'}) - {steps} steps")
+        print(
+            f"[{i}] {form['name']}: {status} ({'✓' if success else '✗'}) - {steps} steps"
+        )
 
     # Summary
-    successful = sum(1 for r in results if r.environment_result.metrics.get('success', False))
-    total_steps = sum(r.environment_result.metrics.get('steps', 0) for r in results)
+    successful = sum(
+        1 for r in results if r.environment_result.metrics.get("success", False)
+    )
+    total_steps = sum(r.environment_result.metrics.get("steps", 0) for r in results)
     avg_steps = total_steps / len(results) if results else 0
 
-    print(f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
+    print(
+        f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)"
+    )
     print(f"⚡ Average steps: {avg_steps:.1f}")
     print(f"🧠 Strategies learned: {len(adapter.playbook.bullets())}")
 
@@ -254,6 +268,7 @@ def main():
 
     # Save playbook
     from pathlib import Path
+
     playbook_path = Path("ace_form_playbook.json")
     adapter.playbook.to_file(str(playbook_path))
     print(f"\n💾 Playbook saved to {playbook_path}")

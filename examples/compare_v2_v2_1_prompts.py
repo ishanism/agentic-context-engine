@@ -18,15 +18,15 @@ from ace.prompts_v2 import PromptManager as PromptManagerV2
 from ace.prompts_v2_1 import (
     PromptManager as PromptManagerV21,
     validate_prompt_output_v2_1,
-    compare_prompt_versions
+    compare_prompt_versions,
 )
 
 
 def format_prompt_preview(prompt: str, max_lines: int = 30) -> str:
     """Format prompt for display with line limit."""
-    lines = prompt.split('\n')[:max_lines]
-    preview = '\n'.join(lines)
-    if len(prompt.split('\n')) > max_lines:
+    lines = prompt.split("\n")[:max_lines]
+    preview = "\n".join(lines)
+    if len(prompt.split("\n")) > max_lines:
         preview += f"\n... ({len(prompt.split('\n')) - max_lines} more lines)"
     return preview
 
@@ -47,7 +47,7 @@ def compare_generator_prompts():
         "playbook": "bullet_001: Use decomposition for multiplication\nbullet_002: Check edge cases",
         "reflection": "Previous attempt failed due to calculation error",
         "question": "Calculate 15 × 24",
-        "context": "Show step-by-step work"
+        "context": "Show step-by-step work",
     }
 
     # Get prompts
@@ -76,7 +76,7 @@ def compare_generator_prompts():
         "FORBIDDEN markers": prompt_v21.count("FORBIDDEN"),
         "Visual indicators (✓✗)": "✓" in prompt_v21 or "✗" in prompt_v21,
         "When to Apply section": "WHEN TO APPLY" in prompt_v21,
-        "Quality check fields": "quality_check" in prompt_v21
+        "Quality check fields": "quality_check" in prompt_v21,
     }
 
     for feature, value in improvements.items():
@@ -125,7 +125,7 @@ def compare_reflector_prompts():
     if "ATOMICITY SCORING" in prompt_v21:
         print("\n📝 V2.1 ATOMICITY SCORING SYSTEM:")
         print("-" * 40)
-        lines = prompt_v21.split('\n')
+        lines = prompt_v21.split("\n")
         in_section = False
         count = 0
         for line in lines:
@@ -171,7 +171,7 @@ def compare_curator_prompts():
     if "Atomic Strategies" in prompt_v21:
         print("\n📝 V2.1 ATOMICITY EXAMPLES:")
         print("-" * 40)
-        lines = prompt_v21.split('\n')
+        lines = prompt_v21.split("\n")
         in_section = False
         count = 0
         for line in lines:
@@ -195,41 +195,47 @@ def test_validation_enhancements():
     print("=" * 80)
 
     # Sample outputs to validate
-    good_generator_output = json.dumps({
-        "reasoning": "1. Breaking down 15 × 24. 2. Using decomposition method.",
-        "bullet_ids": ["bullet_023"],
-        "confidence_scores": {"bullet_023": 0.95},
-        "step_validations": ["Decomposition valid", "Arithmetic verified"],
-        "final_answer": "360",
-        "answer_confidence": 1.0,
-        "quality_check": {
-            "addresses_question": True,
-            "reasoning_complete": True,
-            "citations_provided": True
+    good_generator_output = json.dumps(
+        {
+            "reasoning": "1. Breaking down 15 × 24. 2. Using decomposition method.",
+            "bullet_ids": ["bullet_023"],
+            "confidence_scores": {"bullet_023": 0.95},
+            "step_validations": ["Decomposition valid", "Arithmetic verified"],
+            "final_answer": "360",
+            "answer_confidence": 1.0,
+            "quality_check": {
+                "addresses_question": True,
+                "reasoning_complete": True,
+                "citations_provided": True,
+            },
         }
-    })
+    )
 
-    good_curator_output = json.dumps({
-        "reasoning": "Adding atomic strategy for pandas performance",
-        "deduplication_check": {
-            "similar_bullets": [],
-            "similarity_scores": {},
-            "decision": "safe_to_add"
-        },
-        "operations": [{
-            "type": "ADD",
-            "section": "data_loading",
-            "content": "Use pandas.read_csv() for CSV files",
-            "atomicity_score": 0.98,
-            "bullet_id": "",
-            "metadata": {"helpful": 1, "harmful": 0}
-        }],
-        "quality_metrics": {
-            "avg_atomicity": 0.98,
-            "operations_count": 1,
-            "estimated_impact": 0.85
+    good_curator_output = json.dumps(
+        {
+            "reasoning": "Adding atomic strategy for pandas performance",
+            "deduplication_check": {
+                "similar_bullets": [],
+                "similarity_scores": {},
+                "decision": "safe_to_add",
+            },
+            "operations": [
+                {
+                    "type": "ADD",
+                    "section": "data_loading",
+                    "content": "Use pandas.read_csv() for CSV files",
+                    "atomicity_score": 0.98,
+                    "bullet_id": "",
+                    "metadata": {"helpful": 1, "harmful": 0},
+                }
+            ],
+            "quality_metrics": {
+                "avg_atomicity": 0.98,
+                "operations_count": 1,
+                "estimated_impact": 0.85,
+            },
         }
-    })
+    )
 
     # Validate generator output
     print("\n🔍 Validating Generator Output with v2.1:")
@@ -254,15 +260,19 @@ def test_validation_enhancements():
             print(f"    - {key}: {value:.2f}")
 
     # Test bad curator output (low atomicity)
-    bad_curator_output = json.dumps({
-        "reasoning": "Adding vague strategy",
-        "operations": [{
-            "type": "ADD",
-            "content": "Be careful with data and handle errors properly",
-            "atomicity_score": 0.35,  # Too low!
-            "metadata": {"helpful": 1, "harmful": 0}
-        }]
-    })
+    bad_curator_output = json.dumps(
+        {
+            "reasoning": "Adding vague strategy",
+            "operations": [
+                {
+                    "type": "ADD",
+                    "content": "Be careful with data and handle errors properly",
+                    "atomicity_score": 0.35,  # Too low!
+                    "metadata": {"helpful": 1, "harmful": 0},
+                }
+            ],
+        }
+    )
 
     print("\n🔍 Testing Rejection of Low-Atomicity Strategy:")
     is_valid, errors, metrics = validate_prompt_output_v2_1(
@@ -281,7 +291,8 @@ def show_usage_example():
     print("HOW TO USE V2.1 PROMPTS")
     print("=" * 80)
 
-    print("""
+    print(
+        """
 📚 USAGE EXAMPLE:
 
 ```python
@@ -317,7 +328,8 @@ compare_performance(results_v20, results_v21)
 3. Atomic strategies improve quality
 4. Built-in quality metrics
 5. Backward compatible with v2.0
-""")
+"""
+    )
 
 
 def show_migration_stats():
@@ -334,7 +346,7 @@ def show_migration_stats():
     print(f"  Size increase: {comparisons['length_increase']:.1%}")
 
     print("\n✨ V2.1 ENHANCEMENTS:")
-    for feature, value in comparisons['v21_enhancements'].items():
+    for feature, value in comparisons["v21_enhancements"].items():
         if isinstance(value, bool):
             status = "✅" if value else "❌"
         else:
@@ -361,7 +373,9 @@ def main():
     print("\n" + "=" * 80)
     print("✅ COMPARISON COMPLETE!")
     print("\nRecommendation: Start using v2.1 for improved performance.")
-    print("The enhancements provide better compliance and quality without breaking changes.")
+    print(
+        "The enhancements provide better compliance and quality without breaking changes."
+    )
     print("=" * 80)
 
 

@@ -11,14 +11,15 @@ class TestLangChainClient(unittest.TestCase):
         """Test that import handles missing langchain gracefully."""
         try:
             from ace.llm_providers import LangChainLiteLLMClient
+
             # If it imports, langchain is installed
             self.assertTrue(True)
         except ImportError:
             # This is expected if langchain not installed
             self.assertTrue(True)
 
-    @patch('ace.llm_providers.langchain_client.LANGCHAIN_AVAILABLE', True)
-    @patch('ace.llm_providers.langchain_client.ChatLiteLLM')
+    @patch("ace.llm_providers.langchain_client.LANGCHAIN_AVAILABLE", True)
+    @patch("ace.llm_providers.langchain_client.ChatLiteLLM")
     def test_basic_initialization(self, mock_chat):
         """Test client initialization."""
         from ace.llm_providers.langchain_client import LangChainLiteLLMClient
@@ -30,8 +31,10 @@ class TestLangChainClient(unittest.TestCase):
         mock_chat.assert_called_once()
         self.assertFalse(client.is_router)
 
-    @patch('ace.llm_providers.langchain_client.LANGCHAIN_AVAILABLE', False)
-    def test_missing_langchain_error(self, ):
+    @patch("ace.llm_providers.langchain_client.LANGCHAIN_AVAILABLE", False)
+    def test_missing_langchain_error(
+        self,
+    ):
         """Test error when langchain not available."""
         from ace.llm_providers.langchain_client import LangChainLiteLLMClient
 
@@ -47,18 +50,20 @@ class TestLangChainClient(unittest.TestCase):
         client = LangChainLiteLLMClient.__new__(LangChainLiteLLMClient)
 
         # Test the filter method directly
-        filtered = client._filter_kwargs({
-            'temperature': 0.5,
-            'refinement_round': 1,
-            'max_refinement_rounds': 3,
-            'max_tokens': 100
-        })
+        filtered = client._filter_kwargs(
+            {
+                "temperature": 0.5,
+                "refinement_round": 1,
+                "max_refinement_rounds": 3,
+                "max_tokens": 100,
+            }
+        )
 
-        self.assertIn('temperature', filtered)
-        self.assertIn('max_tokens', filtered)
-        self.assertNotIn('refinement_round', filtered)
-        self.assertNotIn('max_refinement_rounds', filtered)
+        self.assertIn("temperature", filtered)
+        self.assertIn("max_tokens", filtered)
+        self.assertNotIn("refinement_round", filtered)
+        self.assertNotIn("max_refinement_rounds", filtered)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

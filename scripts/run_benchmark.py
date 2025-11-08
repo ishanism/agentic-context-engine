@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -43,51 +44,47 @@ from benchmarks import BenchmarkTaskManager
 
 # Suppress LiteLLM debug messages
 import litellm
+
 litellm.suppress_debug_info = True
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     # Benchmark selection
     parser.add_argument(
         "benchmark",
-        help="Benchmark name to run (finer_ord, xbrl_math, appworld, or 'list' to show available)"
+        help="Benchmark name to run (finer_ord, xbrl_math, appworld, or 'list' to show available)",
     )
 
     # Model configuration
     parser.add_argument(
         "--model",
         default="gpt-4o-mini",
-        help="Model to use for evaluation (default: gpt-4o-mini)"
+        help="Model to use for evaluation (default: gpt-4o-mini)",
     )
     parser.add_argument(
         "--temperature",
         type=float,
         default=0.0,
-        help="Sampling temperature (default: 0.0)"
+        help="Sampling temperature (default: 0.0)",
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=2048,
-        help="Maximum tokens to generate (default: 2048)"
+        help="Maximum tokens to generate (default: 2048)",
     )
 
     # Data configuration
     parser.add_argument(
-        "--split",
-        default="test",
-        help="Dataset split to evaluate (default: test)"
+        "--split", default="test", help="Dataset split to evaluate (default: test)"
     )
     parser.add_argument(
-        "--limit",
-        type=int,
-        help="Limit number of samples to evaluate (default: all)"
+        "--limit", type=int, help="Limit number of samples to evaluate (default: all)"
     )
 
     # ACE configuration
@@ -95,63 +92,56 @@ def parse_args() -> argparse.Namespace:
         "--epochs",
         type=int,
         default=1,
-        help="Number of offline adaptation epochs (default: 1)"
+        help="Number of offline adaptation epochs (default: 1)",
     )
     parser.add_argument(
         "--max-refinement-rounds",
         type=int,
         default=3,
-        help="Maximum refinement rounds per sample (default: 3)"
+        help="Maximum refinement rounds per sample (default: 3)",
     )
     parser.add_argument(
         "--skip-adaptation",
         action="store_true",
-        help="Skip ACE adaptation and run direct evaluation"
+        help="Skip ACE adaptation and run direct evaluation",
     )
     parser.add_argument(
         "--split-ratio",
         type=float,
         default=0.8,
-        help="Train/test split ratio (default: 0.8 = 80%% train, 20%% test)"
+        help="Train/test split ratio (default: 0.8 = 80%% train, 20%% test)",
     )
     parser.add_argument(
         "--online-mode",
         action="store_true",
-        help="Use online learning (OnlineAdapter) instead of offline adaptation"
+        help="Use online learning (OnlineAdapter) instead of offline adaptation",
     )
     parser.add_argument(
         "--prompt-version",
         choices=["v1", "v2"],
         default="v1",
-        help="Prompt version to use (default: v1)"
+        help="Prompt version to use (default: v1)",
     )
     parser.add_argument(
         "--compare",
         action="store_true",
-        help="Run both baseline and ACE, then compare results"
+        help="Run both baseline and ACE, then compare results",
     )
 
     # Output configuration
     parser.add_argument(
         "--output",
         default="benchmark_results",
-        help="Output directory for results (default: benchmark_results)"
+        help="Output directory for results (default: benchmark_results)",
     )
     parser.add_argument(
-        "--save-detailed",
-        action="store_true",
-        help="Save detailed per-sample results"
+        "--save-detailed", action="store_true", help="Save detailed per-sample results"
     )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress progress output"
-    )
+    parser.add_argument("--quiet", action="store_true", help="Suppress progress output")
 
     # Cache configuration
     parser.add_argument(
-        "--cache-dir",
-        help="Override cache directory for benchmark data"
+        "--cache-dir", help="Override cache directory for benchmark data"
     )
 
     return parser.parse_args()
@@ -181,7 +171,9 @@ def create_llm_client(args: argparse.Namespace) -> LiteLLMClient:
     )
 
 
-def load_benchmark_data(args: argparse.Namespace, manager: BenchmarkTaskManager) -> List[Sample]:
+def load_benchmark_data(
+    args: argparse.Namespace, manager: BenchmarkTaskManager
+) -> List[Sample]:
     """Load and convert benchmark data to Sample format."""
     if not args.quiet:
         print(f"Loading {args.benchmark} data (split: {args.split})...")
@@ -195,7 +187,7 @@ def load_benchmark_data(args: argparse.Namespace, manager: BenchmarkTaskManager)
 
     # Apply limit if specified
     if args.limit:
-        raw_data = raw_data[:args.limit]
+        raw_data = raw_data[: args.limit]
 
     if not args.quiet:
         print(f"Loaded {len(raw_data)} samples")
@@ -209,38 +201,38 @@ def load_benchmark_data(args: argparse.Namespace, manager: BenchmarkTaskManager)
             sample = Sample(
                 question=data["instruction"],
                 context=f"Available APIs: {data['api_docs']}",
-                ground_truth="Task completion successful"
+                ground_truth="Task completion successful",
             )
         elif args.benchmark == "finer_ord":
             # FiNER now comes pre-processed from the loader
             sample = Sample(
-                question=data['question'],
-                ground_truth=data['ground_truth'],
-                context=data.get('context', '')
+                question=data["question"],
+                ground_truth=data["ground_truth"],
+                context=data.get("context", ""),
             )
         elif args.benchmark == "xbrl_math":
             # XBRL-Math handling
             sample = Sample(
-                question=data.get('question', ''),
-                context=data.get('context', ''),
-                ground_truth=str(data.get('answer', ''))
+                question=data.get("question", ""),
+                context=data.get("context", ""),
+                ground_truth=str(data.get("answer", "")),
             )
         elif args.benchmark == "simple_qa":
             # Squad/SQuAD handling - answers is a dict with text list
-            answers = data.get('answers', {})
-            if isinstance(answers, dict) and 'text' in answers:
-                ground_truth = answers['text'][0] if answers['text'] else ''
+            answers = data.get("answers", {})
+            if isinstance(answers, dict) and "text" in answers:
+                ground_truth = answers["text"][0] if answers["text"] else ""
             else:
-                ground_truth = str(answers) if answers else ''
+                ground_truth = str(answers) if answers else ""
 
             sample = Sample(
-                question=data['question'],
+                question=data["question"],
                 ground_truth=ground_truth,
-                context=data.get('context', '')
+                context=data.get("context", ""),
             )
         elif args.benchmark == "hellaswag":
             # HellaSwag handling - format multiple choice and convert label
-            choices = data['endings']
+            choices = data["endings"]
             question = f"""Context: {data['ctx']}
 
 Which ending makes the most sense?
@@ -253,16 +245,13 @@ D) {choices[3]}
 Answer with just the letter (A, B, C, or D)."""
 
             # Convert numeric label to letter
-            label_map = {'0': 'A', '1': 'B', '2': 'C', '3': 'D'}
-            ground_truth = label_map.get(str(data['label']), 'A')
+            label_map = {"0": "A", "1": "B", "2": "C", "3": "D"}
+            ground_truth = label_map.get(str(data["label"]), "A")
 
-            sample = Sample(
-                question=question,
-                ground_truth=ground_truth
-            )
+            sample = Sample(question=question, ground_truth=ground_truth)
         elif args.benchmark in ["arc_easy", "arc_challenge"]:
             # ARC handling - format multiple choice
-            choices = data['choices']['text']
+            choices = data["choices"]["text"]
             question = f"""Question: {data['question']}
 
 A) {choices[0]}
@@ -272,13 +261,10 @@ D) {choices[3]}
 
 Answer with just the letter (A, B, C, or D)."""
 
-            sample = Sample(
-                question=question,
-                ground_truth=data['answerKey']
-            )
+            sample = Sample(question=question, ground_truth=data["answerKey"])
         elif args.benchmark == "mmlu":
             # MMLU handling - format multiple choice
-            choices = data['choices']
+            choices = data["choices"]
             question = f"""Question: {data['question']}
 
 A) {choices[0]}
@@ -289,28 +275,25 @@ D) {choices[3]}
 Answer with just the letter (A, B, C, or D)."""
 
             # Convert numeric answer to letter
-            answer_map = {0: 'A', 1: 'B', 2: 'C', 3: 'D'}
-            ground_truth = answer_map.get(data['answer'], 'A')
+            answer_map = {0: "A", 1: "B", 2: "C", 3: "D"}
+            ground_truth = answer_map.get(data["answer"], "A")
 
-            sample = Sample(
-                question=question,
-                ground_truth=ground_truth
-            )
+            sample = Sample(question=question, ground_truth=ground_truth)
         else:
             # Generic handling - check if already processed
-            if 'question' in data:
+            if "question" in data:
                 # Already processed by a processor
                 sample = Sample(
-                    question=data['question'],
-                    ground_truth=data.get('ground_truth', ''),
-                    context=data.get('context', '')
+                    question=data["question"],
+                    ground_truth=data.get("ground_truth", ""),
+                    context=data.get("context", ""),
                 )
             else:
                 # Raw data - use generic handling
                 sample = Sample(
-                    question=str(data.get('question', data.get('input', ''))),
-                    ground_truth=str(data.get('answer', data.get('output', ''))),
-                    context=str(data.get('context', ''))
+                    question=str(data.get("question", data.get("input", ""))),
+                    ground_truth=str(data.get("answer", data.get("output", ""))),
+                    context=str(data.get("context", "")),
                 )
 
         samples.append(sample)
@@ -318,11 +301,15 @@ Answer with just the letter (A, B, C, or D)."""
     return samples
 
 
-def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager: BenchmarkTaskManager) -> None:
+def run_comparison_mode(
+    args: argparse.Namespace, samples: List[Sample], manager: BenchmarkTaskManager
+) -> None:
     """Run both baseline and ACE evaluations, then compare results."""
     print(f"🚀 Running COMPARISON MODE for {args.benchmark}")
-    print(f"Model: {args.model}, Samples: {len(samples)}, Prompt: {args.prompt_version}")
-    print("="*60)
+    print(
+        f"Model: {args.model}, Samples: {len(samples)}, Prompt: {args.prompt_version}"
+    )
+    print("=" * 60)
 
     # Run baseline evaluation
     print("\n1️⃣ Running BASELINE evaluation...")
@@ -337,9 +324,9 @@ def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager
     ace_results = run_evaluation(ace_args, samples, manager)
 
     # Compare and display results
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("📊 BASELINE vs ACE COMPARISON")
-    print("="*80)
+    print("=" * 80)
 
     # Get metrics from both runs
     baseline_summary = baseline_results.get("summary", {})
@@ -366,7 +353,9 @@ def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager
                     improvement = f" ({diff:.2%} ⚠️)"
                 else:
                     improvement = " (no change)"
-            print(f"  {base_metric.replace('_', ' ').title()}: {value:.2%}{improvement}")
+            print(
+                f"  {base_metric.replace('_', ' ').title()}: {value:.2%}{improvement}"
+            )
 
     # Show overfitting analysis if available
     if "overfitting_gap" in ace_results and ace_results["overfitting_gap"]:
@@ -376,20 +365,28 @@ def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager
             if metric.endswith("_mean"):
                 base_metric = metric[:-5]
                 if gap > 0.05:
-                    print(f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ⚠️  (significant overfitting)")
+                    print(
+                        f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ⚠️  (significant overfitting)"
+                    )
                 elif gap > 0.02:
-                    print(f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ⚡ (minor overfitting)")
+                    print(
+                        f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ⚡ (minor overfitting)"
+                    )
                 else:
-                    print(f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ✅ (good generalization)")
+                    print(
+                        f"  {base_metric.replace('_', ' ').title()}: {gap:.2%} ✅ (good generalization)"
+                    )
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
 
     # Save comparison results
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    comparison_file = output_dir / f"comparison_{args.benchmark}_{args.model}_{timestamp}.json"
+    comparison_file = (
+        output_dir / f"comparison_{args.benchmark}_{args.model}_{timestamp}.json"
+    )
 
     comparison_data = {
         "benchmark": args.benchmark,
@@ -404,7 +401,7 @@ def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager
             "max_tokens": args.max_tokens,
             "split_ratio": args.split_ratio,
             "online_mode": args.online_mode,
-            "prompt_version": args.prompt_version
+            "prompt_version": args.prompt_version,
         },
         "baseline_results": baseline_results,
         "ace_results": ace_results,
@@ -412,11 +409,11 @@ def run_comparison_mode(args: argparse.Namespace, samples: List[Sample], manager
             "baseline_summary": baseline_summary,
             "ace_test_summary": ace_summary,
             "ace_train_summary": ace_results.get("train_summary", {}),
-            "overfitting_gap": ace_results.get("overfitting_gap", {})
-        }
+            "overfitting_gap": ace_results.get("overfitting_gap", {}),
+        },
     }
 
-    with open(comparison_file, 'w') as f:
+    with open(comparison_file, "w") as f:
         json.dump(comparison_data, f, indent=2, ensure_ascii=False)
 
     print(f"💾 Comparison results saved to: {comparison_file}")
@@ -428,9 +425,14 @@ def create_ace_components(client: LiteLLMClient, prompt_version: str):
     if prompt_version == "v2":
         try:
             from ace.prompts_v2 import PromptManager
+
             manager = PromptManager()
-            generator = Generator(client, prompt_template=manager.get_generator_prompt())
-            reflector = Reflector(client, prompt_template=manager.get_reflector_prompt())
+            generator = Generator(
+                client, prompt_template=manager.get_generator_prompt()
+            )
+            reflector = Reflector(
+                client, prompt_template=manager.get_reflector_prompt()
+            )
             curator = Curator(client, prompt_template=manager.get_curator_prompt())
         except ImportError:
             print("Warning: v2 prompts not available, falling back to v1")
@@ -459,13 +461,13 @@ def split_samples(samples: List[Sample], split_ratio: float):
 
 
 def run_evaluation(
-    args: argparse.Namespace,
-    samples: List[Sample],
-    manager: BenchmarkTaskManager
+    args: argparse.Namespace, samples: List[Sample], manager: BenchmarkTaskManager
 ) -> Dict[str, Any]:
     """Run benchmark evaluation with ACE using proper train/test split."""
     if not args.quiet:
-        print(f"Starting evaluation with {args.model} (prompt: {args.prompt_version})...")
+        print(
+            f"Starting evaluation with {args.model} (prompt: {args.prompt_version})..."
+        )
 
     # Create LLM client and ACE components with appropriate prompts
     client = create_llm_client(args)
@@ -489,23 +491,23 @@ def run_evaluation(
 
             # Generate response
             output = generator.generate(
-                question=sample.question,
-                context=sample.context,
-                playbook=playbook
+                question=sample.question, context=sample.context, playbook=playbook
             )
 
             # Evaluate
             env_result = environment.evaluate(sample, output)
 
-            results.append({
-                "sample_id": f"{args.benchmark}_{i:04d}",
-                "question": sample.question,
-                "prediction": output.final_answer,
-                "ground_truth": sample.ground_truth,
-                "metrics": env_result.metrics,
-                "feedback": env_result.feedback,
-                "split": "baseline"
-            })
+            results.append(
+                {
+                    "sample_id": f"{args.benchmark}_{i:04d}",
+                    "question": sample.question,
+                    "prediction": output.final_answer,
+                    "ground_truth": sample.ground_truth,
+                    "metrics": env_result.metrics,
+                    "feedback": env_result.feedback,
+                    "split": "baseline",
+                }
+            )
 
         result_dict = {
             "benchmark": args.benchmark,
@@ -514,7 +516,7 @@ def run_evaluation(
             "evaluation_mode": "baseline",
             "samples_evaluated": len(results),
             "results": results,
-            "summary": compute_summary_metrics(results)
+            "summary": compute_summary_metrics(results),
         }
 
     else:
@@ -522,7 +524,9 @@ def run_evaluation(
         train_samples, test_samples = split_samples(samples, args.split_ratio)
 
         if not args.quiet:
-            print(f"📊 Train/test split: {len(train_samples)} train, {len(test_samples)} test (ratio: {args.split_ratio:.2f})")
+            print(
+                f"📊 Train/test split: {len(train_samples)} train, {len(test_samples)} test (ratio: {args.split_ratio:.2f})"
+            )
 
         if args.online_mode:
             # Online learning mode - learn from each sample sequentially
@@ -535,7 +539,7 @@ def run_evaluation(
                 reflector=reflector,
                 curator=curator,
                 max_refinement_rounds=args.max_refinement_rounds,
-                enable_observability=True
+                enable_observability=True,
             )
 
             # Process all samples sequentially (each is learned from then tested)
@@ -543,16 +547,18 @@ def run_evaluation(
 
             # Convert to results format
             for step_idx, step in enumerate(adaptation_results):
-                results.append({
-                    "sample_id": f"{args.benchmark}_{step_idx:04d}",
-                    "question": step.sample.question,
-                    "prediction": step.generator_output.final_answer,
-                    "ground_truth": step.sample.ground_truth,
-                    "metrics": step.environment_result.metrics,
-                    "feedback": step.environment_result.feedback,
-                    "split": "online",
-                    "step": step_idx
-                })
+                results.append(
+                    {
+                        "sample_id": f"{args.benchmark}_{step_idx:04d}",
+                        "question": step.sample.question,
+                        "prediction": step.generator_output.final_answer,
+                        "ground_truth": step.sample.ground_truth,
+                        "metrics": step.environment_result.metrics,
+                        "feedback": step.environment_result.feedback,
+                        "split": "online",
+                        "step": step_idx,
+                    }
+                )
 
             result_dict = {
                 "benchmark": args.benchmark,
@@ -561,7 +567,7 @@ def run_evaluation(
                 "evaluation_mode": "online",
                 "samples_evaluated": len(results),
                 "results": results,
-                "summary": compute_summary_metrics(results)
+                "summary": compute_summary_metrics(results),
             }
 
         else:
@@ -575,26 +581,30 @@ def run_evaluation(
                 reflector=reflector,
                 curator=curator,
                 max_refinement_rounds=args.max_refinement_rounds,
-                enable_observability=True
+                enable_observability=True,
             )
 
             # Train on training samples
             if len(train_samples) > 0:
                 if not args.quiet:
                     print(f"📚 Training on {len(train_samples)} samples...")
-                adaptation_results = adapter.run(train_samples, environment, epochs=args.epochs)
+                adaptation_results = adapter.run(
+                    train_samples, environment, epochs=args.epochs
+                )
 
                 # Store training results
                 for step_idx, step in enumerate(adaptation_results):
-                    train_results.append({
-                        "sample_id": f"{args.benchmark}_train_{step_idx:04d}",
-                        "question": step.sample.question,
-                        "prediction": step.generator_output.final_answer,
-                        "ground_truth": step.sample.ground_truth,
-                        "metrics": step.environment_result.metrics,
-                        "feedback": step.environment_result.feedback,
-                        "split": "train"
-                    })
+                    train_results.append(
+                        {
+                            "sample_id": f"{args.benchmark}_train_{step_idx:04d}",
+                            "question": step.sample.question,
+                            "prediction": step.generator_output.final_answer,
+                            "ground_truth": step.sample.ground_truth,
+                            "metrics": step.environment_result.metrics,
+                            "feedback": step.environment_result.feedback,
+                            "split": "train",
+                        }
+                    )
 
             # Test on unseen test samples using learned playbook
             if len(test_samples) > 0:
@@ -606,33 +616,39 @@ def run_evaluation(
                     output = generator.generate(
                         question=sample.question,
                         context=sample.context,
-                        playbook=adapter.playbook
+                        playbook=adapter.playbook,
                     )
 
                     # Evaluate
                     env_result = environment.evaluate(sample, output)
 
-                    test_results.append({
-                        "sample_id": f"{args.benchmark}_test_{i:04d}",
-                        "question": sample.question,
-                        "prediction": output.final_answer,
-                        "ground_truth": sample.ground_truth,
-                        "metrics": env_result.metrics,
-                        "feedback": env_result.feedback,
-                        "split": "test"
-                    })
+                    test_results.append(
+                        {
+                            "sample_id": f"{args.benchmark}_test_{i:04d}",
+                            "question": sample.question,
+                            "prediction": output.final_answer,
+                            "ground_truth": sample.ground_truth,
+                            "metrics": env_result.metrics,
+                            "feedback": env_result.feedback,
+                            "split": "test",
+                        }
+                    )
 
             # Combine results
             results = train_results + test_results
 
             # Calculate overfitting gap
-            train_summary = compute_summary_metrics(train_results) if train_results else {}
+            train_summary = (
+                compute_summary_metrics(train_results) if train_results else {}
+            )
             test_summary = compute_summary_metrics(test_results) if test_results else {}
 
             overfitting_gap = {}
             for metric in train_summary:
                 if metric in test_summary:
-                    overfitting_gap[metric] = train_summary[metric] - test_summary[metric]
+                    overfitting_gap[metric] = (
+                        train_summary[metric] - test_summary[metric]
+                    )
 
             result_dict = {
                 "benchmark": args.benchmark,
@@ -648,12 +664,12 @@ def run_evaluation(
                 "train_summary": train_summary,
                 "test_summary": test_summary,
                 "overfitting_gap": overfitting_gap,
-                "summary": test_summary  # Overall summary uses test performance (TRUE performance)
+                "summary": test_summary,  # Overall summary uses test performance (TRUE performance)
             }
 
         # Export observability data if available
         observability_data = None
-        if hasattr(adapter, 'observability_data'):
+        if hasattr(adapter, "observability_data"):
             observability_data = adapter.observability_data
 
         if observability_data:
@@ -710,11 +726,11 @@ def save_results(args: argparse.Namespace, evaluation_results: Dict[str, Any]) -
             "split_ratio": args.split_ratio,
             "online_mode": args.online_mode,
             "prompt_version": args.prompt_version,
-            "evaluation_mode": evaluation_results.get("evaluation_mode", "unknown")
-        }
+            "evaluation_mode": evaluation_results.get("evaluation_mode", "unknown"),
+        },
     }
 
-    with open(summary_file, 'w') as f:
+    with open(summary_file, "w") as f:
         json.dump(summary_data, f, indent=2, ensure_ascii=False)
 
     if not args.quiet:
@@ -723,24 +739,26 @@ def save_results(args: argparse.Namespace, evaluation_results: Dict[str, Any]) -
     # Save detailed results if requested
     if args.save_detailed:
         detailed_file = output_dir / f"{base_name}_detailed.json"
-        with open(detailed_file, 'w') as f:
+        with open(detailed_file, "w") as f:
             json.dump(evaluation_results, f, indent=2, ensure_ascii=False)
 
         if not args.quiet:
             print(f"Detailed results saved to: {detailed_file}")
 
     # Print summary to console
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"Benchmark: {evaluation_results['benchmark']}")
     print(f"Model: {evaluation_results['model']}")
     print(f"Prompt Version: {evaluation_results.get('prompt_version', 'v1')}")
     print(f"Evaluation Mode: {evaluation_results.get('evaluation_mode', 'unknown')}")
 
     if "train_samples" in evaluation_results and "test_samples" in evaluation_results:
-        print(f"Train/Test Split: {evaluation_results['train_samples']}/{evaluation_results['test_samples']} (ratio: {evaluation_results.get('split_ratio', 0.8):.2f})")
+        print(
+            f"Train/Test Split: {evaluation_results['train_samples']}/{evaluation_results['test_samples']} (ratio: {evaluation_results.get('split_ratio', 0.8):.2f})"
+        )
     else:
         print(f"Samples: {evaluation_results['samples_evaluated']}")
-    print("="*60)
+    print("=" * 60)
 
     # Show test metrics (true performance) for train/test split
     if "test_summary" in evaluation_results and evaluation_results["test_summary"]:
@@ -751,18 +769,28 @@ def save_results(args: argparse.Namespace, evaluation_results: Dict[str, Any]) -
                 print(f"  {base_metric.replace('_', ' ').title()}: {value:.2%}")
 
         # Show overfitting gap if available
-        if "overfitting_gap" in evaluation_results and evaluation_results["overfitting_gap"]:
+        if (
+            "overfitting_gap" in evaluation_results
+            and evaluation_results["overfitting_gap"]
+        ):
             print("\n📈 OVERFITTING ANALYSIS:")
             for metric, gap in evaluation_results["overfitting_gap"].items():
                 if metric.endswith("_mean"):
                     base_metric = metric[:-5]
                     if gap > 0.05:  # Significant overfitting
-                        print(f"  {base_metric.replace('_', ' ').title()} Gap: {gap:.2%} ⚠️  (overfitting)")
+                        print(
+                            f"  {base_metric.replace('_', ' ').title()} Gap: {gap:.2%} ⚠️  (overfitting)"
+                        )
                     else:
-                        print(f"  {base_metric.replace('_', ' ').title()} Gap: {gap:.2%} ✅")
+                        print(
+                            f"  {base_metric.replace('_', ' ').title()} Gap: {gap:.2%} ✅"
+                        )
 
         # Show training performance for reference
-        if "train_summary" in evaluation_results and evaluation_results["train_summary"]:
+        if (
+            "train_summary" in evaluation_results
+            and evaluation_results["train_summary"]
+        ):
             print("\n📚 TRAIN PERFORMANCE (Reference):")
             for metric, value in evaluation_results["train_summary"].items():
                 if metric.endswith("_mean"):

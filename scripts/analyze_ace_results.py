@@ -7,12 +7,13 @@ import json
 import sys
 from pathlib import Path
 
+
 def analyze_ace_run(detailed_results_file):
     """Analyze a detailed ACE results file."""
     print("🔍 ACE RESULTS ANALYSIS")
-    print("="*50)
+    print("=" * 50)
 
-    with open(detailed_results_file, 'r') as f:
+    with open(detailed_results_file, "r") as f:
         data = json.load(f)
 
     print(f"📊 SUMMARY:")
@@ -23,8 +24,8 @@ def analyze_ace_run(detailed_results_file):
 
     # Analyze epochs by looking at repeated sample IDs
     sample_occurrences = {}
-    for result in data['results']:
-        sample_id = result['sample_id']
+    for result in data["results"]:
+        sample_id = result["sample_id"]
         if sample_id not in sample_occurrences:
             sample_occurrences[sample_id] = 0
         sample_occurrences[sample_id] += 1
@@ -36,28 +37,30 @@ def analyze_ace_run(detailed_results_file):
     print(f"  Unique samples: {unique_samples}")
     print(f"  Max epochs per sample: {max_epochs}")
     print(f"  Total evaluations: {sum(sample_occurrences.values())}")
-    print(f"  Sample counting logic: {unique_samples} samples × {max_epochs} epochs = {unique_samples * max_epochs}")
+    print(
+        f"  Sample counting logic: {unique_samples} samples × {max_epochs} epochs = {unique_samples * max_epochs}"
+    )
 
     # Show ACE learning components
     print(f"\n🧠 ACE LEARNING VERIFICATION:")
-    first_result = data['results'][0]
+    first_result = data["results"][0]
 
-    has_reflection = 'reflection' in first_result
-    has_curator = 'curator_output' in first_result
+    has_reflection = "reflection" in first_result
+    has_curator = "curator_output" in first_result
 
     print(f"  ✅ Reflection component: {'Working' if has_reflection else 'Missing'}")
     print(f"  ✅ Curator component: {'Working' if has_curator else 'Missing'}")
 
     if has_reflection:
-        reflection = first_result['reflection']
+        reflection = first_result["reflection"]
         print(f"  ✅ Reflection fields: {list(reflection.keys())}")
 
     if has_curator:
-        curator = first_result['curator_output']
-        operations = curator.get('operations', [])
+        curator = first_result["curator_output"]
+        operations = curator.get("operations", [])
         print(f"  ✅ Curator operations: {len(operations)} operations")
         if operations:
-            op_types = [op['type'] for op in operations]
+            op_types = [op["type"] for op in operations]
             print(f"      Operation types: {set(op_types)}")
 
     # Show learning progression
@@ -65,8 +68,8 @@ def analyze_ace_run(detailed_results_file):
 
     # Group by sample ID to show epochs
     epochs_by_sample = {}
-    for result in data['results']:
-        sample_id = result['sample_id']
+    for result in data["results"]:
+        sample_id = result["sample_id"]
         if sample_id not in epochs_by_sample:
             epochs_by_sample[sample_id] = []
         epochs_by_sample[sample_id].append(result)
@@ -79,12 +82,12 @@ def analyze_ace_run(detailed_results_file):
     print(f"  Epochs: {len(first_sample_epochs)}")
 
     for i, epoch_result in enumerate(first_sample_epochs):
-        f1 = epoch_result['metrics']['f1']
+        f1 = epoch_result["metrics"]["f1"]
         print(f"    Epoch {i+1}: F1={f1:.3f}")
 
         # Show if any learning artifacts exist
-        if 'used_bullets' in epoch_result:
-            bullets = epoch_result.get('used_bullets', [])
+        if "used_bullets" in epoch_result:
+            bullets = epoch_result.get("used_bullets", [])
             print(f"              Used {len(bullets)} learned strategies")
 
     # Performance comparison across epochs
@@ -95,9 +98,9 @@ def analyze_ace_run(detailed_results_file):
 
     for sample_id, epochs in epochs_by_sample.items():
         if len(epochs) >= 1:
-            epoch_1_f1s.append(epochs[0]['metrics']['f1'])
+            epoch_1_f1s.append(epochs[0]["metrics"]["f1"])
         if len(epochs) >= 2:
-            epoch_2_f1s.append(epochs[1]['metrics']['f1'])
+            epoch_2_f1s.append(epochs[1]["metrics"]["f1"])
 
     if epoch_1_f1s:
         avg_epoch_1 = sum(epoch_1_f1s) / len(epoch_1_f1s)
@@ -110,13 +113,14 @@ def analyze_ace_run(detailed_results_file):
         print(f"  Improvement: {improvement:+.3f}")
 
     return {
-        'unique_samples': unique_samples,
-        'max_epochs': max_epochs,
-        'total_evaluations': len(data['results']),
-        'has_learning': has_reflection and has_curator,
-        'epoch_1_avg': avg_epoch_1 if epoch_1_f1s else 0,
-        'epoch_2_avg': avg_epoch_2 if epoch_2_f1s else 0
+        "unique_samples": unique_samples,
+        "max_epochs": max_epochs,
+        "total_evaluations": len(data["results"]),
+        "has_learning": has_reflection and has_curator,
+        "epoch_1_avg": avg_epoch_1 if epoch_1_f1s else 0,
+        "epoch_2_avg": avg_epoch_2 if epoch_2_f1s else 0,
     }
+
 
 def main():
     if len(sys.argv) < 2:
@@ -135,6 +139,7 @@ def main():
 
     results_file = sys.argv[1]
     analyze_ace_run(results_file)
+
 
 if __name__ == "__main__":
     main()

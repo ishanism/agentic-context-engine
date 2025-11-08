@@ -25,7 +25,7 @@ def get_test_domains() -> List[str]:
         "techstartup123.app",
         "newcompany456.info",
         "uniquebusiness789.online",
-        "moderntech2024.dev"
+        "moderntech2024.dev",
     ]
 
 

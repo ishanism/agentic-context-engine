@@ -17,11 +17,15 @@ load_dotenv()
 
 # Import utils from parent directory
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils import print_history_details
 
-async def run_browser_task(task: str, model: str = "gpt-4o-mini", headless: bool = True):
+
+async def run_browser_task(
+    task: str, model: str = "gpt-4o-mini", headless: bool = True
+):
     """Run browser task without any learning."""
     browser = None
     try:
@@ -46,7 +50,11 @@ async def run_browser_task(task: str, model: str = "gpt-4o-mini", headless: bool
 
         # Parse result
         output = history.final_result() if hasattr(history, "final_result") else ""
-        steps = len(history.action_names()) if hasattr(history, "action_names") and history.action_names() else 0
+        steps = (
+            len(history.action_names())
+            if hasattr(history, "action_names") and history.action_names()
+            else 0
+        )
 
         # Determine status
         status = "ERROR"
@@ -57,20 +65,28 @@ async def run_browser_task(task: str, model: str = "gpt-4o-mini", headless: bool
             "status": status,
             "steps": steps,
             "output": output,
-            "success": status == "SUCCESS"
+            "success": status == "SUCCESS",
         }
 
     except asyncio.TimeoutError:
         # Get actual steps even on timeout - history should exist
         try:
-            steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+            steps = (
+                history.number_of_steps()
+                if "history" in locals() and hasattr(history, "number_of_steps")
+                else 0
+            )
         except:
             steps = 25  # max_steps if we can't determine
         return {"status": "ERROR", "steps": steps, "error": "Timeout", "success": False}
     except Exception as e:
         # Get actual steps even on error - history might exist
         try:
-            steps = history.number_of_steps() if 'history' in locals() and hasattr(history, "number_of_steps") else 0
+            steps = (
+                history.number_of_steps()
+                if "history" in locals() and hasattr(history, "number_of_steps")
+                else 0
+            )
         except:
             steps = 0
         return {"status": "ERROR", "steps": steps, "error": str(e), "success": False}
@@ -84,7 +100,7 @@ async def run_browser_task(task: str, model: str = "gpt-4o-mini", headless: bool
 
 def main(task_file: str = "task1_flight_search.txt"):
     """Main function - basic browser automation without learning.
-    
+
     Args:
         task_file: Path to the task file containing the browser task description.
                   Defaults to "task1_flight_search.txt".
@@ -93,7 +109,6 @@ def main(task_file: str = "task1_flight_search.txt"):
     print("\n🤖 Baseline Browser Agent (WITHOUT ACE)")
     print("🚫 No learning - same approach every time")
     print("=" * 40)
-    
 
     print("\n🔄 Starting browser task (no learning)...\n")
 
@@ -109,13 +124,14 @@ def main(task_file: str = "task1_flight_search.txt"):
     print("=" * 40)
     print("📊 Results:")
 
-
     # Summary
-    successful = sum(1 for r in results if r['success'])
-    total_steps = sum(r['steps'] for r in results)
+    successful = sum(1 for r in results if r["success"])
+    total_steps = sum(r["steps"] for r in results)
     avg_steps = total_steps / len(results) if results else 0
 
-    print(f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
+    print(
+        f"\n✅ Success rate: {successful}/{len(results)} ({100*successful/len(results):.1f}%)"
+    )
     print(f"⚡ Average steps: {avg_steps:.1f}")
     print(f"🚫 No learning - same performance every time")
 

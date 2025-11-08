@@ -12,11 +12,12 @@ class TestLiteLLMClient(unittest.IsolatedAsyncioTestCase):
         """Test that LiteLLM client can be imported."""
         try:
             from ace.llm_providers import LiteLLMClient
+
             self.assertTrue(True)
         except ImportError:
             self.fail("Failed to import LiteLLMClient")
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_basic_completion(self, mock_completion):
         """Test basic completion functionality."""
         from ace.llm_providers import LiteLLMClient
@@ -25,9 +26,7 @@ class TestLiteLLMClient(unittest.IsolatedAsyncioTestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Test response"))]
         mock_response.usage = MagicMock(
-            prompt_tokens=10,
-            completion_tokens=5,
-            total_tokens=15
+            prompt_tokens=10, completion_tokens=5, total_tokens=15
         )
         mock_response.model = "gpt-3.5-turbo"
         mock_completion.return_value = mock_response
@@ -43,7 +42,7 @@ class TestLiteLLMClient(unittest.IsolatedAsyncioTestCase):
         """Test that ACE-specific parameters are filtered."""
         from ace.llm_providers import LiteLLMClient
 
-        with patch('ace.llm_providers.litellm_client.completion') as mock:
+        with patch("ace.llm_providers.litellm_client.completion") as mock:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock(message=MagicMock(content="Test"))]
             mock_response.usage = None
@@ -55,8 +54,8 @@ class TestLiteLLMClient(unittest.IsolatedAsyncioTestCase):
 
             # Check that filtered params aren't in the call
             call_kwargs = mock.call_args[1]
-            self.assertNotIn('refinement_round', call_kwargs)
-            self.assertNotIn('max_refinement_rounds', call_kwargs)
+            self.assertNotIn("refinement_round", call_kwargs)
+            self.assertNotIn("max_refinement_rounds", call_kwargs)
 
 
 class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
@@ -65,12 +64,15 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Set up test fixtures."""
         from ace.llm_providers import LiteLLMClient
+
         self.mock_response = MagicMock()
-        self.mock_response.choices = [MagicMock(message=MagicMock(content="Test response"))]
+        self.mock_response.choices = [
+            MagicMock(message=MagicMock(content="Test response"))
+        ]
         self.mock_response.usage = None
         self.mock_response.model = "claude-3-sonnet-20240229"
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_claude_temperature_priority_default(self, mock_completion):
         """Test default temperature priority for Claude models."""
         from ace.llm_providers import LiteLLMClient
@@ -85,7 +87,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_kwargs["temperature"], 0.7)
         self.assertNotIn("top_p", call_kwargs)
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_claude_fallback_priority_with_default_temperature(self, mock_completion):
         """Test fallback priority when temperature is 0 and top_p provided."""
         from ace.llm_providers import LiteLLMClient
@@ -101,7 +103,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_kwargs["top_p"], 0.9)
         self.assertNotIn("temperature", call_kwargs)  # Should be removed in fallback
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_claude_prefer_top_p_strategy(self, mock_completion):
         """Test prefer_top_p strategy for Claude models."""
         from ace.llm_providers import LiteLLMClient, LiteLLMConfig
@@ -109,9 +111,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         mock_completion.return_value = self.mock_response
 
         config = LiteLLMConfig(
-            model="claude-3-sonnet-20240229",
-            temperature=0.7,
-            sampling_priority="top_p"
+            model="claude-3-sonnet-20240229", temperature=0.7, sampling_priority="top_p"
         )
         client = LiteLLMClient(config=config)
         client.complete("Test prompt", top_p=0.9)
@@ -121,7 +121,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_kwargs["top_p"], 0.9)
         self.assertNotIn("temperature", call_kwargs)
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_claude_prefer_top_k_strategy(self, mock_completion):
         """Test prefer_top_k strategy for Claude models."""
         from ace.llm_providers import LiteLLMClient, LiteLLMConfig
@@ -129,9 +129,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         mock_completion.return_value = self.mock_response
 
         config = LiteLLMConfig(
-            model="claude-3-sonnet-20240229",
-            temperature=0.7,
-            sampling_priority="top_k"
+            model="claude-3-sonnet-20240229", temperature=0.7, sampling_priority="top_k"
         )
         client = LiteLLMClient(config=config)
         client.complete("Test prompt", top_p=0.9, top_k=50)
@@ -142,7 +140,7 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("temperature", call_kwargs)
         self.assertNotIn("top_p", call_kwargs)
 
-    @patch('ace.llm_providers.litellm_client.completion')
+    @patch("ace.llm_providers.litellm_client.completion")
     def test_non_claude_model_no_filtering(self, mock_completion):
         """Test that non-Claude models don't get parameter filtering."""
         from ace.llm_providers import LiteLLMClient
@@ -169,12 +167,12 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
             LiteLLMClient._resolve_sampling_params(
                 {"temperature": 0.7, "top_p": 0.9},
                 "claude-3-sonnet-20240229",
-                "invalid_priority"
+                "invalid_priority",
             )
 
         self.assertIn("Invalid sampling_priority", str(context.exception))
 
-    @patch('ace.llm_providers.litellm_client.acompletion')
+    @patch("ace.llm_providers.litellm_client.acompletion")
     async def test_async_claude_parameter_resolution(self, mock_acompletion):
         """Test that async completion also applies Claude parameter resolution."""
         from ace.llm_providers import LiteLLMClient
@@ -195,28 +193,25 @@ class TestClaudeParameterResolution(unittest.IsolatedAsyncioTestCase):
 
         # Test with None values
         result = LiteLLMClient._resolve_sampling_params(
-            {"temperature": None, "top_p": 0.9},
-            "claude-3-sonnet-20240229"
+            {"temperature": None, "top_p": 0.9}, "claude-3-sonnet-20240229"
         )
         self.assertEqual(result["top_p"], 0.9)
         self.assertNotIn("temperature", result)
 
         # Test with only temperature=0
         result = LiteLLMClient._resolve_sampling_params(
-            {"temperature": 0.0},
-            "claude-3-sonnet-20240229"
+            {"temperature": 0.0}, "claude-3-sonnet-20240229"
         )
         self.assertEqual(result["temperature"], 0.0)
         self.assertNotIn("top_p", result)
 
         # Test non-Claude model (should pass through unchanged)
         result = LiteLLMClient._resolve_sampling_params(
-            {"temperature": 0.7, "top_p": 0.9},
-            "gpt-4"
+            {"temperature": 0.7, "top_p": 0.9}, "gpt-4"
         )
         self.assertEqual(result["temperature"], 0.7)
         self.assertEqual(result["top_p"], 0.9)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

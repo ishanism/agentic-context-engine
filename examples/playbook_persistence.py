@@ -11,14 +11,13 @@ class SimpleTaskEnvironment(TaskEnvironment):
 
     def evaluate(self, sample: Sample, generator_output) -> EnvironmentResult:
         # Simple evaluation: check if answer contains expected keyword
-        is_correct = sample.ground_truth.lower() in generator_output.final_answer.lower()
+        is_correct = (
+            sample.ground_truth.lower() in generator_output.final_answer.lower()
+        )
 
         feedback = "Correct!" if is_correct else f"Expected '{sample.ground_truth}'"
 
-        return EnvironmentResult(
-            feedback=feedback,
-            ground_truth=sample.ground_truth
-        )
+        return EnvironmentResult(feedback=feedback, ground_truth=sample.ground_truth)
 
 
 def train_and_save_playbook():
@@ -32,28 +31,20 @@ def train_and_save_playbook():
     curator = Curator(client)
 
     # Create offline adapter
-    adapter = OfflineAdapter(
-        generator=generator,
-        reflector=reflector,
-        curator=curator
-    )
+    adapter = OfflineAdapter(generator=generator, reflector=reflector, curator=curator)
 
     # Create training samples
     samples = [
         Sample(
             question="What is the capital of France?",
             context="European geography",
-            ground_truth="Paris"
+            ground_truth="Paris",
         ),
-        Sample(
-            question="What is 2 + 2?",
-            context="Basic arithmetic",
-            ground_truth="4"
-        ),
+        Sample(question="What is 2 + 2?", context="Basic arithmetic", ground_truth="4"),
         Sample(
             question="What color is the sky on a clear day?",
             context="Common knowledge",
-            ground_truth="blue"
+            ground_truth="blue",
         ),
     ]
 
@@ -90,7 +81,7 @@ def load_and_use_playbook(playbook_path):
         question="What is the capital of Germany?",
         context="European geography",
         playbook=playbook,
-        reflection=None
+        reflection=None,
     )
 
     print(f"\nTest question: What is the capital of Germany?")
@@ -102,9 +93,9 @@ def load_and_use_playbook(playbook_path):
 
 def demonstrate_playbook_inspection(playbook):
     """Show how to inspect a loaded playbook."""
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("PLAYBOOK INSPECTION")
-    print("="*50)
+    print("=" * 50)
 
     # Print playbook statistics
     stats = playbook.stats()
@@ -154,21 +145,21 @@ if __name__ == "__main__":
         print(f"Example requires API keys to be set: {e}")
 
         # Demonstrate without API calls
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("DEMONSTRATING SAVE/LOAD WITHOUT API CALLS")
-        print("="*50)
+        print("=" * 50)
 
         # Create a playbook manually
         playbook = Playbook()
         playbook.add_bullet(
             section="general",
             content="Always provide step-by-step explanations",
-            metadata={"helpful": 3, "harmful": 0}
+            metadata={"helpful": 3, "harmful": 0},
         )
         playbook.add_bullet(
             section="math",
             content="Show your calculations clearly",
-            metadata={"helpful": 5, "harmful": 0}
+            metadata={"helpful": 5, "harmful": 0},
         )
 
         # Save it

@@ -109,8 +109,14 @@ class HuggingFaceLoader(DataLoader):
 
         # Add any additional kwargs, filtering out our custom ones
         custom_keys = {
-            "dataset_path", "split", "streaming", "cache_dir",
-            "subset", "columns", "source", "benchmark_name"  # Add benchmark_name to filter
+            "dataset_path",
+            "split",
+            "streaming",
+            "cache_dir",
+            "subset",
+            "columns",
+            "source",
+            "benchmark_name",  # Add benchmark_name to filter
         }
         for key, value in kwargs.items():
             if key not in custom_keys:
@@ -120,11 +126,11 @@ class HuggingFaceLoader(DataLoader):
         dataset = load_dataset(**load_args)
 
         # Check if we need dataset-specific processing
-        benchmark_name = kwargs.get('benchmark_name')
+        benchmark_name = kwargs.get("benchmark_name")
         processor = get_processor(benchmark_name) if benchmark_name else None
 
         # Handle FiNER special case - needs token grouping
-        if benchmark_name == 'finer_ord' and processor:
+        if benchmark_name == "finer_ord" and processor:
             # For FiNER, we need to collect all tokens and process them
             token_stream = dataset if streaming else iter(dataset)
 
@@ -132,9 +138,9 @@ class HuggingFaceLoader(DataLoader):
             for processed_sample in processor.process_token_stream(token_stream):
                 # Convert Sample back to dict for compatibility
                 yield {
-                    'question': processed_sample.question,
-                    'ground_truth': processed_sample.ground_truth,
-                    'context': getattr(processed_sample, 'context', '')
+                    "question": processed_sample.question,
+                    "ground_truth": processed_sample.ground_truth,
+                    "context": getattr(processed_sample, "context", ""),
                 }
         else:
             # Standard processing for other datasets
@@ -158,7 +164,9 @@ class HuggingFaceLoader(DataLoader):
         # 3. Fall back to default HuggingFace location
         return os.path.expanduser("~/.cache/huggingface/datasets")
 
-    def get_dataset_info(self, dataset_path: str, subset: Optional[str] = None) -> Dict[str, Any]:
+    def get_dataset_info(
+        self, dataset_path: str, subset: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get metadata about a HuggingFace dataset without downloading.
 
@@ -222,6 +230,7 @@ class HuggingFaceLoader(DataLoader):
         """
         try:
             from datasets import get_dataset_config_names
+
             return get_dataset_config_names(dataset_path)
         except ImportError:
             raise ImportError(

@@ -23,16 +23,18 @@ class FiNERProcessor:
 
     def __init__(self):
         self.label_map = {
-            0: 'O',      # Outside
-            1: 'B-PER',  # Begin Person
-            2: 'I-PER',  # Inside Person
-            3: 'B-LOC',  # Begin Location
-            4: 'I-LOC',  # Inside Location
-            5: 'B-ORG',  # Begin Organization
-            6: 'I-ORG',  # Inside Organization
+            0: "O",  # Outside
+            1: "B-PER",  # Begin Person
+            2: "I-PER",  # Inside Person
+            3: "B-LOC",  # Begin Location
+            4: "I-LOC",  # Inside Location
+            5: "B-ORG",  # Begin Organization
+            6: "I-ORG",  # Inside Organization
         }
 
-    def process_token_stream(self, token_stream: Iterator[Dict[str, Any]]) -> Iterator[Sample]:
+    def process_token_stream(
+        self, token_stream: Iterator[Dict[str, Any]]
+    ) -> Iterator[Sample]:
         """
         Process token stream and yield sentence-level samples.
 
@@ -46,13 +48,12 @@ class FiNERProcessor:
         doc_sentences = defaultdict(lambda: defaultdict(list))
 
         for token_data in token_stream:
-            doc_idx = token_data['doc_idx']
-            sent_idx = token_data['sent_idx']
+            doc_idx = token_data["doc_idx"]
+            sent_idx = token_data["sent_idx"]
 
-            doc_sentences[doc_idx][sent_idx].append({
-                'token': token_data['gold_token'],
-                'label': token_data['gold_label']
-            })
+            doc_sentences[doc_idx][sent_idx].append(
+                {"token": token_data["gold_token"], "label": token_data["gold_label"]}
+            )
 
         # Process each sentence
         sample_id = 0
@@ -63,15 +64,17 @@ class FiNERProcessor:
                 sentence_tokens = document[sent_idx]
 
                 # Reconstruct sentence text
-                tokens = [item['token'] for item in sentence_tokens]
-                labels = [self.label_map.get(item['label'], 'O') for item in sentence_tokens]
+                tokens = [item["token"] for item in sentence_tokens]
+                labels = [
+                    self.label_map.get(item["label"], "O") for item in sentence_tokens
+                ]
 
                 sentence_text = self._reconstruct_sentence(tokens)
                 entities = self._extract_entities(tokens, labels)
 
                 yield Sample(
                     question=f"Identify named entities in the following financial text:\n\n{sentence_text}",
-                    ground_truth=self._format_entities_as_string(entities)
+                    ground_truth=self._format_entities_as_string(entities),
                 )
 
                 sample_id += 1
@@ -94,10 +97,12 @@ class FiNERProcessor:
 
     def _is_punctuation(self, token: str) -> bool:
         """Check if token is punctuation that shouldn't have space before it."""
-        punctuation = {'.', ',', '!', '?', ';', ':', "'", '"', ')', ']', '}', '%'}
+        punctuation = {".", ",", "!", "?", ";", ":", "'", '"', ")", "]", "}", "%"}
         return token in punctuation
 
-    def _extract_entities(self, tokens: List[str], labels: List[str]) -> List[Dict[str, Any]]:
+    def _extract_entities(
+        self, tokens: List[str], labels: List[str]
+    ) -> List[Dict[str, Any]]:
         """
         Convert BIO labels to entity spans.
 
@@ -112,7 +117,7 @@ class FiNERProcessor:
         current_entity = None
 
         for i, (token, label) in enumerate(zip(tokens, labels)):
-            if label.startswith('B-'):
+            if label.startswith("B-"):
                 # Save previous entity if exists
                 if current_entity:
                     entities.append(self._finalize_entity(current_entity, tokens))
@@ -120,29 +125,29 @@ class FiNERProcessor:
                 # Start new entity
                 entity_type = label[2:]  # Remove 'B-' prefix
                 current_entity = {
-                    'type': entity_type,
-                    'start_idx': i,
-                    'end_idx': i,
-                    'token_indices': [i]
+                    "type": entity_type,
+                    "start_idx": i,
+                    "end_idx": i,
+                    "token_indices": [i],
                 }
 
-            elif label.startswith('I-') and current_entity:
+            elif label.startswith("I-") and current_entity:
                 # Continue current entity
                 entity_type = label[2:]  # Remove 'I-' prefix
-                if entity_type == current_entity['type']:
-                    current_entity['end_idx'] = i
-                    current_entity['token_indices'].append(i)
+                if entity_type == current_entity["type"]:
+                    current_entity["end_idx"] = i
+                    current_entity["token_indices"].append(i)
                 else:
                     # Type mismatch - finalize previous and start new
                     entities.append(self._finalize_entity(current_entity, tokens))
                     current_entity = {
-                        'type': entity_type,
-                        'start_idx': i,
-                        'end_idx': i,
-                        'token_indices': [i]
+                        "type": entity_type,
+                        "start_idx": i,
+                        "end_idx": i,
+                        "token_indices": [i],
                     }
 
-            elif label == 'O':
+            elif label == "O":
                 # Outside - finalize current entity if exists
                 if current_entity:
                     entities.append(self._finalize_entity(current_entity, tokens))
@@ -154,17 +159,19 @@ class FiNERProcessor:
 
         return entities
 
-    def _finalize_entity(self, entity_info: Dict[str, Any], tokens: List[str]) -> Dict[str, Any]:
+    def _finalize_entity(
+        self, entity_info: Dict[str, Any], tokens: List[str]
+    ) -> Dict[str, Any]:
         """Convert entity info to final entity dictionary."""
-        entity_tokens = [tokens[i] for i in entity_info['token_indices']]
+        entity_tokens = [tokens[i] for i in entity_info["token_indices"]]
         entity_text = self._reconstruct_entity_text(entity_tokens)
 
         return {
-            'text': entity_text,
-            'label': entity_info['type'],
-            'start_idx': entity_info['start_idx'],
-            'end_idx': entity_info['end_idx'],
-            'tokens': entity_tokens
+            "text": entity_text,
+            "label": entity_info["type"],
+            "start_idx": entity_info["start_idx"],
+            "end_idx": entity_info["end_idx"],
+            "tokens": entity_tokens,
         }
 
     def _reconstruct_entity_text(self, entity_tokens: List[str]) -> str:
@@ -196,15 +203,17 @@ class FiNERProcessor:
 class XBRLMathProcessor:
     """Processor for XBRL-Math dataset - handles numerical reasoning problems."""
 
-    def process_samples(self, sample_stream: Iterator[Dict[str, Any]]) -> Iterator[Sample]:
+    def process_samples(
+        self, sample_stream: Iterator[Dict[str, Any]]
+    ) -> Iterator[Sample]:
         """Process XBRL-Math samples - may need restructuring based on actual format."""
         sample_id = 0
 
         for sample_data in sample_stream:
             yield Sample(
-                question=sample_data.get('question', ''),
-                context=sample_data.get('context', ''),
-                ground_truth=str(sample_data.get('answer', ''))
+                question=sample_data.get("question", ""),
+                context=sample_data.get("context", ""),
+                ground_truth=str(sample_data.get("answer", "")),
             )
             sample_id += 1
 
@@ -218,16 +227,16 @@ class AppWorldProcessor:
             yield Sample(
                 question=task_data["instruction"],
                 context=f"Available APIs: {task_data['api_docs']}",
-                ground_truth="Task completion successful"
+                ground_truth="Task completion successful",
             )
 
 
 def get_processor(benchmark_name: str):
     """Get appropriate processor for benchmark."""
     processors = {
-        'finer_ord': FiNERProcessor(),
-        'xbrl_math': XBRLMathProcessor(),
-        'appworld': AppWorldProcessor()
+        "finer_ord": FiNERProcessor(),
+        "xbrl_math": XBRLMathProcessor(),
+        "appworld": AppWorldProcessor(),
     }
 
     return processors.get(benchmark_name)

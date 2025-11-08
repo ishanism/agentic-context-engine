@@ -46,7 +46,9 @@ class ComparisonEnvironment(TaskEnvironment):
             correct = abs(expected - actual) < 0.0001
         except:
             # Fall back to text comparison
-            correct = sample.ground_truth.lower() in generator_output.final_answer.lower()
+            correct = (
+                sample.ground_truth.lower() in generator_output.final_answer.lower()
+            )
 
         # Track additional metrics
         metrics = {
@@ -54,27 +56,27 @@ class ComparisonEnvironment(TaskEnvironment):
             "has_reasoning": bool(generator_output.reasoning),
             "reasoning_length": len(generator_output.reasoning),
             "cited_bullets": len(generator_output.bullet_ids),
-            "answer_length": len(generator_output.final_answer)
+            "answer_length": len(generator_output.final_answer),
         }
 
         # Check for confidence if available (v2 feature)
-        if hasattr(generator_output, 'raw'):
+        if hasattr(generator_output, "raw"):
             raw = generator_output.raw
-            if 'answer_confidence' in raw:
-                metrics['has_confidence'] = True
-                metrics['confidence_value'] = raw['answer_confidence']
+            if "answer_confidence" in raw:
+                metrics["has_confidence"] = True
+                metrics["confidence_value"] = raw["answer_confidence"]
             else:
-                metrics['has_confidence'] = False
+                metrics["has_confidence"] = False
 
-            if 'confidence_scores' in raw:
-                metrics['has_bullet_confidence'] = True
+            if "confidence_scores" in raw:
+                metrics["has_bullet_confidence"] = True
             else:
-                metrics['has_bullet_confidence'] = False
+                metrics["has_bullet_confidence"] = False
 
         return EnvironmentResult(
             feedback="Correct!" if correct else "Incorrect",
             ground_truth=sample.ground_truth,
-            metrics=metrics
+            metrics=metrics,
         )
 
 
@@ -90,17 +92,18 @@ def run_comparison_test(llm_client, samples, environment, version="v1"):
     else:
         # Use v2 prompts
         manager = PromptManager()
-        generator = Generator(llm_client, prompt_template=manager.get_generator_prompt())
-        reflector = Reflector(llm_client, prompt_template=manager.get_reflector_prompt())
+        generator = Generator(
+            llm_client, prompt_template=manager.get_generator_prompt()
+        )
+        reflector = Reflector(
+            llm_client, prompt_template=manager.get_reflector_prompt()
+        )
         curator = Curator(llm_client, prompt_template=manager.get_curator_prompt())
         print("\n🚀 Using v2 prompts (enhanced)")
 
     # Create adapter
     adapter = OfflineAdapter(
-        playbook=Playbook(),
-        generator=generator,
-        reflector=reflector,
-        curator=curator
+        playbook=Playbook(), generator=generator, reflector=reflector, curator=curator
     )
 
     # Run adaptation
@@ -119,7 +122,7 @@ def run_comparison_test(llm_client, samples, environment, version="v1"):
         "has_bullet_confidence": 0,
         "json_errors": 0,
         "elapsed_time": elapsed_time,
-        "playbook_size": len(adapter.playbook.bullets())
+        "playbook_size": len(adapter.playbook.bullets()),
     }
 
     reasoning_lengths = []
@@ -129,42 +132,44 @@ def run_comparison_test(llm_client, samples, environment, version="v1"):
     for result in results:
         result_metrics = result.environment_result.metrics
 
-        if result_metrics.get('correct'):
-            metrics['correct'] += 1
+        if result_metrics.get("correct"):
+            metrics["correct"] += 1
 
-        if result_metrics.get('has_reasoning'):
-            metrics['has_reasoning'] += 1
-            reasoning_lengths.append(result_metrics.get('reasoning_length', 0))
+        if result_metrics.get("has_reasoning"):
+            metrics["has_reasoning"] += 1
+            reasoning_lengths.append(result_metrics.get("reasoning_length", 0))
 
-        bullets_cited.append(result_metrics.get('cited_bullets', 0))
+        bullets_cited.append(result_metrics.get("cited_bullets", 0))
 
-        if result_metrics.get('has_confidence'):
-            metrics['has_confidence'] += 1
-            confidence_values.append(result_metrics.get('confidence_value', 0))
+        if result_metrics.get("has_confidence"):
+            metrics["has_confidence"] += 1
+            confidence_values.append(result_metrics.get("confidence_value", 0))
 
-        if result_metrics.get('has_bullet_confidence'):
-            metrics['has_bullet_confidence'] += 1
+        if result_metrics.get("has_bullet_confidence"):
+            metrics["has_bullet_confidence"] += 1
 
     # Calculate averages
     if reasoning_lengths:
-        metrics['avg_reasoning_length'] = sum(reasoning_lengths) / len(reasoning_lengths)
+        metrics["avg_reasoning_length"] = sum(reasoning_lengths) / len(
+            reasoning_lengths
+        )
     if bullets_cited:
-        metrics['avg_bullets_cited'] = sum(bullets_cited) / len(bullets_cited)
+        metrics["avg_bullets_cited"] = sum(bullets_cited) / len(bullets_cited)
     if confidence_values:
-        metrics['avg_confidence'] = sum(confidence_values) / len(confidence_values)
+        metrics["avg_confidence"] = sum(confidence_values) / len(confidence_values)
 
     # Test JSON compliance for a sample output
     if results:
         try:
             output = results[0].generator_output
-            if hasattr(output, 'raw'):
+            if hasattr(output, "raw"):
                 json_str = json.dumps(output.raw)
                 is_valid, errors = validate_prompt_output(json_str, "generator")
-                metrics['json_valid'] = is_valid
-                metrics['validation_errors'] = errors
+                metrics["json_valid"] = is_valid
+                metrics["validation_errors"] = errors
         except Exception as e:
-            metrics['json_valid'] = False
-            metrics['validation_errors'] = [str(e)]
+            metrics["json_valid"] = False
+            metrics["validation_errors"] = [str(e)]
 
     return metrics, adapter.playbook
 
@@ -172,13 +177,13 @@ def run_comparison_test(llm_client, samples, environment, version="v1"):
 def print_comparison_results(v1_metrics, v2_metrics):
     """Print detailed comparison between v1 and v2."""
 
-    print("\n" + "="*70)
-    print(" "*25 + "COMPARISON RESULTS")
-    print("="*70)
+    print("\n" + "=" * 70)
+    print(" " * 25 + "COMPARISON RESULTS")
+    print("=" * 70)
 
     # Accuracy comparison
-    v1_accuracy = v1_metrics['correct'] / v1_metrics['total'] * 100
-    v2_accuracy = v2_metrics['correct'] / v2_metrics['total'] * 100
+    v1_accuracy = v1_metrics["correct"] / v1_metrics["total"] * 100
+    v2_accuracy = v2_metrics["correct"] / v2_metrics["total"] * 100
 
     print(f"\n📊 ACCURACY")
     print(f"  v1: {v1_accuracy:.1f}% ({v1_metrics['correct']}/{v1_metrics['total']})")
@@ -194,8 +199,13 @@ def print_comparison_results(v1_metrics, v2_metrics):
     print(f"\n💭 REASONING QUALITY")
     print(f"  v1 avg length: {v1_metrics.get('avg_reasoning_length', 0):.0f} chars")
     print(f"  v2 avg length: {v2_metrics.get('avg_reasoning_length', 0):.0f} chars")
-    if v2_metrics.get('avg_reasoning_length', 0) > v1_metrics.get('avg_reasoning_length', 0):
-        improvement = ((v2_metrics['avg_reasoning_length'] / v1_metrics['avg_reasoning_length']) - 1) * 100
+    if v2_metrics.get("avg_reasoning_length", 0) > v1_metrics.get(
+        "avg_reasoning_length", 0
+    ):
+        improvement = (
+            (v2_metrics["avg_reasoning_length"] / v1_metrics["avg_reasoning_length"])
+            - 1
+        ) * 100
         print(f"  ✅ v2 reasoning is {improvement:.0f}% more detailed")
 
     # Bullet citations
@@ -207,28 +217,36 @@ def print_comparison_results(v1_metrics, v2_metrics):
 
     # v2-specific features
     print(f"\n🆕 V2-SPECIFIC FEATURES")
-    print(f"  Confidence scores: {v2_metrics.get('has_confidence', 0)}/{v2_metrics['total']} samples")
-    if v2_metrics.get('has_confidence', 0) > 0:
+    print(
+        f"  Confidence scores: {v2_metrics.get('has_confidence', 0)}/{v2_metrics['total']} samples"
+    )
+    if v2_metrics.get("has_confidence", 0) > 0:
         print(f"  Avg confidence: {v2_metrics.get('avg_confidence', 0):.2%}")
-    print(f"  Bullet confidence: {v2_metrics.get('has_bullet_confidence', 0)}/{v2_metrics['total']} samples")
+    print(
+        f"  Bullet confidence: {v2_metrics.get('has_bullet_confidence', 0)}/{v2_metrics['total']} samples"
+    )
 
     # JSON compliance
     print(f"\n✓ OUTPUT COMPLIANCE")
     print(f"  v1 JSON valid: {v1_metrics.get('json_valid', False)}")
     print(f"  v2 JSON valid: {v2_metrics.get('json_valid', False)}")
-    if v1_metrics.get('validation_errors'):
+    if v1_metrics.get("validation_errors"):
         print(f"  v1 errors: {v1_metrics['validation_errors']}")
-    if v2_metrics.get('validation_errors'):
+    if v2_metrics.get("validation_errors"):
         print(f"  v2 errors: {v2_metrics['validation_errors']}")
 
     # Performance
     print(f"\n⚡ PERFORMANCE")
     print(f"  v1 time: {v1_metrics['elapsed_time']:.1f}s")
     print(f"  v2 time: {v2_metrics['elapsed_time']:.1f}s")
-    if v2_metrics['elapsed_time'] < v1_metrics['elapsed_time']:
-        print(f"  ✅ v2 is {v1_metrics['elapsed_time'] - v2_metrics['elapsed_time']:.1f}s faster")
+    if v2_metrics["elapsed_time"] < v1_metrics["elapsed_time"]:
+        print(
+            f"  ✅ v2 is {v1_metrics['elapsed_time'] - v2_metrics['elapsed_time']:.1f}s faster"
+        )
     else:
-        print(f"  ⚠️  v2 is {v2_metrics['elapsed_time'] - v1_metrics['elapsed_time']:.1f}s slower")
+        print(
+            f"  ⚠️  v2 is {v2_metrics['elapsed_time'] - v1_metrics['elapsed_time']:.1f}s slower"
+        )
 
     # Overall assessment
     print(f"\n📈 OVERALL ASSESSMENT")
@@ -240,15 +258,19 @@ def print_comparison_results(v1_metrics, v2_metrics):
     elif v1_accuracy > v2_accuracy:
         v1_wins += 1
 
-    if v2_metrics.get('avg_reasoning_length', 0) > v1_metrics.get('avg_reasoning_length', 0):
+    if v2_metrics.get("avg_reasoning_length", 0) > v1_metrics.get(
+        "avg_reasoning_length", 0
+    ):
         v2_wins += 1
 
-    if v2_metrics.get('has_confidence', 0) > 0:
+    if v2_metrics.get("has_confidence", 0) > 0:
         v2_wins += 1  # v2-specific feature
 
-    if v2_metrics.get('json_valid', False) and not v1_metrics.get('json_valid', False):
+    if v2_metrics.get("json_valid", False) and not v1_metrics.get("json_valid", False):
         v2_wins += 1
-    elif v1_metrics.get('json_valid', False) and not v2_metrics.get('json_valid', False):
+    elif v1_metrics.get("json_valid", False) and not v2_metrics.get(
+        "json_valid", False
+    ):
         v1_wins += 1
 
     if v2_wins > v1_wins:
@@ -258,16 +280,16 @@ def print_comparison_results(v1_metrics, v2_metrics):
     else:
         print(f"  🔄 Performance is comparable")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
 
 
 def main():
     """Run comprehensive v1 vs v2 comparison."""
 
-    print("\n" + "="*70)
-    print(" "*20 + "v1 vs v2.1 PROMPT COMPARISON")
-    print(" "*15 + "Testing prompt engineering improvements")
-    print("="*70)
+    print("\n" + "=" * 70)
+    print(" " * 20 + "v1 vs v2.1 PROMPT COMPARISON")
+    print(" " * 15 + "Testing prompt engineering improvements")
+    print("=" * 70)
 
     # Check for API key
     if not os.getenv("OPENAI_API_KEY"):
@@ -276,40 +298,22 @@ def main():
 
     # Create LLM client
     llm = LiteLLMClient(
-        model="gpt-3.5-turbo",
-        temperature=0.1  # Low temperature for consistency
+        model="gpt-3.5-turbo", temperature=0.1  # Low temperature for consistency
     )
 
     # Test samples covering different types
     samples = [
         # Math problems
-        Sample(
-            question="What is 12 + 8?",
-            ground_truth="20"
-        ),
-        Sample(
-            question="Solve for x: 3x - 7 = 14",
-            ground_truth="7"
-        ),
-        Sample(
-            question="What is 25% of 80?",
-            ground_truth="20"
-        ),
-
+        Sample(question="What is 12 + 8?", ground_truth="20"),
+        Sample(question="Solve for x: 3x - 7 = 14", ground_truth="7"),
+        Sample(question="What is 25% of 80?", ground_truth="20"),
         # Factual questions
-        Sample(
-            question="What is the capital of France?",
-            ground_truth="Paris"
-        ),
-        Sample(
-            question="Who painted the Mona Lisa?",
-            ground_truth="Leonardo da Vinci"
-        ),
-
+        Sample(question="What is the capital of France?", ground_truth="Paris"),
+        Sample(question="Who painted the Mona Lisa?", ground_truth="Leonardo da Vinci"),
         # Reasoning questions
         Sample(
             question="If all roses are flowers and some flowers are red, can we conclude that some roses are red?",
-            ground_truth="No"
+            ground_truth="No",
         ),
     ]
 
@@ -319,12 +323,16 @@ def main():
     print(f"\n🧪 Testing with {len(samples)} diverse samples...")
 
     # Test v1 prompts
-    print("\n" + "-"*50)
-    v1_metrics, v1_playbook = run_comparison_test(llm, samples, environment, version="v1")
+    print("\n" + "-" * 50)
+    v1_metrics, v1_playbook = run_comparison_test(
+        llm, samples, environment, version="v1"
+    )
 
     # Test v2 prompts
-    print("\n" + "-"*50)
-    v2_metrics, v2_playbook = run_comparison_test(llm, samples, environment, version="v2")
+    print("\n" + "-" * 50)
+    v2_metrics, v2_playbook = run_comparison_test(
+        llm, samples, environment, version="v2"
+    )
 
     # Compare results
     print_comparison_results(v1_metrics, v2_metrics)
@@ -341,17 +349,20 @@ def main():
         print(f"  {v2_playbook.bullets()[0].content[:150]}...")
 
     # Domain-specific comparison (if time permits)
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("💡 RECOMMENDATIONS")
-    print("-"*70)
+    print("-" * 70)
 
-    if v2_metrics.get('has_confidence', 0) > 0:
+    if v2_metrics.get("has_confidence", 0) > 0:
         print("✅ v2 provides confidence scores for better uncertainty handling")
 
-    if v2_metrics.get('avg_reasoning_length', 0) > v1_metrics.get('avg_reasoning_length', 0) * 1.2:
+    if (
+        v2_metrics.get("avg_reasoning_length", 0)
+        > v1_metrics.get("avg_reasoning_length", 0) * 1.2
+    ):
         print("✅ v2 produces more detailed reasoning chains")
 
-    if v2_metrics.get('json_valid', False):
+    if v2_metrics.get("json_valid", False):
         print("✅ v2 has better JSON schema compliance")
 
     print("\n🔧 Consider using:")
@@ -359,7 +370,7 @@ def main():
     print("  - Domain-specific v2 variants for specialized tasks")
     print("  - PromptManager for A/B testing in your use case")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
 
 
 if __name__ == "__main__":

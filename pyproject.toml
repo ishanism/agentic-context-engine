@@ -73,6 +73,7 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
     "git-changelog>=2.5.0",
 ]
 all = [
@@ -101,3 +102,30 @@ packages = ["ace", "ace.llm_providers", "ace.observability"]
 
 [tool.setuptools.package-data]
 ace = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+files = ["ace"]
+exclude = [
+    "^tests/",
+    "^examples/",
+    "^scripts/",
+    "^benchmarks/",
+]
