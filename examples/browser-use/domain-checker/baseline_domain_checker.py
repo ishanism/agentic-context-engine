@@ -13,20 +13,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from browser_use import Agent, Browser, ChatAnthropic
+from browser_use import Agent, Browser, ChatBrowserUse
 
 # Import common utilities from parent directory
 import sys
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from shared import (
-    calculate_timeout_steps,
-    format_result_output,
-    MAX_RETRIES,
-    DEFAULT_TIMEOUT_SECONDS,
-)
-from debug import print_history_details
+# Utility function for timeout calculation
+def calculate_timeout_steps(timeout_seconds: float) -> int:
+    """Calculate steps for timeout based on 1 step per 12 seconds."""
+    return int(timeout_seconds // 12)
 
 # Import domain-specific utilities from local module
 from domain_utils import (
@@ -36,9 +31,7 @@ from domain_utils import (
 )
 
 
-async def check_domain(
-    domain: str, model: str = "claude-sonnet-4-5-20250929", headless: bool = True
-):
+async def check_domain(domain: str, headless: bool = True):
     """Check domain availability without any learning, with retry logic."""
     max_retries = 3
     last_error = None
@@ -59,7 +52,7 @@ async def check_domain(
             await browser.start()
 
             # Create agent with basic task (no learning, no strategy optimization)
-            llm = ChatAnthropic(model=model, temperature=0.0)
+            llm = ChatBrowserUse()
 
             # Use common template
             task = DOMAIN_CHECKER_TEMPLATE.format(domain=domain)
@@ -69,15 +62,13 @@ async def check_domain(
                 llm=llm,
                 browser=browser,
                 max_actions_per_step=5,
-                max_steps=20,
+                max_steps=25,
                 calculate_cost=True,  # Enable cost tracking
             )
 
             # Run with timeout
             history = await asyncio.wait_for(agent.run(), timeout=180.0)
 
-            # Debug: Print detailed history information (uncomment for debugging)
-            # print_history_details(history)
 
             # Parse result (back to original working logic)
             output = history.final_result() if hasattr(history, "final_result") else ""

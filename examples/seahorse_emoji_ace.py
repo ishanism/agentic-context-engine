@@ -28,7 +28,6 @@ from ace.observability import configure_opik
 
 # Suppress LiteLLM debug messages
 import litellm
-
 litellm.suppress_debug_info = True
 
 console = Console()
@@ -37,15 +36,14 @@ console = Console()
 def main():
     # Display header
     console.print("\n" + "=" * 60)
-    console.print(
-        "[bold cyan]🌊 The Kayba Test - ACE Self-Learning Demo 🌊[/bold cyan]"
-    )
+    console.print("[bold cyan]🌊 The Kayba Test - ACE Self-Learning Demo 🌊[/bold cyan]")
     console.print("[dim]Using Claude Opus 4.1[/dim]")
     console.print("=" * 60 + "\n")
 
     # Configure Opik observability
     integration = configure_opik(
-        project_name="kayba-test", tags=["demo", "seahorse", "self-learning"]
+        project_name="kayba-test",
+        tags=["demo", "seahorse", "self-learning"]
     )
     status = "✓ Enabled" if integration.is_available() else "✗ Disabled"
     console.print(f"[cyan]Opik Observability: {status}[/cyan]")
@@ -83,12 +81,8 @@ def main():
 
     # ACE self-reflects without external feedback
     console.print("\n[cyan]━━━ Self-Reflection Phase ━━━[/cyan]")
-    console.print(
-        "[dim]ACE analyzes its own response without external feedback...[/dim]"
-    )
-    console.print(
-        "[dim]Note: ACE has no ground truth - it doesn't know if the answer is correct![/dim]"
-    )
+    console.print("[dim]ACE analyzes its own response without external feedback...[/dim]")
+    console.print("[dim]Note: ACE has no ground truth - it doesn't know if the answer is correct![/dim]")
 
     # Reflect without feedback - just based on the output
     reflection = reflector.reflect(
@@ -118,9 +112,7 @@ def main():
     # Second ask - should use playbook
     console.print(f"\n[yellow]━━━ Round 2: With Learned Strategies ━━━[/yellow]")
     console.print(f"[bold]Question:[/bold] {question}")
-    console.print(
-        f"[dim]Playbook: {len(playbook.bullets())} learned strategies[/dim]\n"
-    )
+    console.print(f"[dim]Playbook: {len(playbook.bullets())} learned strategies[/dim]\n")
     output2 = generator.generate(
         question=question,
         context="",
@@ -133,7 +125,6 @@ def main():
 
     # Just show the two answers for comparison
     import time
-
     time.sleep(2)  # Pause before showing results
     console.print("\n" + "=" * 60)
     console.print("[bold cyan]📊 Results Comparison[/bold cyan]")
@@ -146,12 +137,8 @@ def main():
     console.print(Panel(output2.final_answer, style="green"))
 
     console.print("\n[bold red]⚠️  Fact Check:[/bold red]")
-    console.print(
-        "[dim]There is NO seahorse emoji in Unicode (despite what models often claim).[/dim]"
-    )
-    console.print(
-        "[dim]This demo shows how ACE learns strategies through self-reflection.[/dim]\n"
-    )
+    console.print("[dim]There is NO seahorse emoji in Unicode (despite what models often claim).[/dim]")
+    console.print("[dim]This demo shows how ACE learns strategies through self-reflection.[/dim]\n")
 
 
 if __name__ == "__main__":

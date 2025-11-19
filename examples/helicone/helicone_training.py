@@ -167,7 +167,7 @@ def main():
     """Main training loop."""
 
     # Configuration
-    HELICONE_JSONL_PATH = "../.private/helicone-data-past-7-days-prod-30-10-25.jsonl"
+    HELICONE_JSONL_PATH = "../../.private/helicone-data-past-7-days-prod-30-10-25.jsonl"
     MAX_SAMPLES = 50  # Start small for testing
     EPOCHS = 1
     MODEL = "claude-sonnet-4-20250514"  # Model from Helicone data

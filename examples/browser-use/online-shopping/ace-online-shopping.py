@@ -7,8 +7,10 @@ Uses the new ACEAgent integration for clean, automatic learning.
 """
 
 import asyncio
+import datetime
 import os
 import sys
+import time
 from pathlib import Path
 
 # Add parent directories to path for imports
@@ -19,10 +21,129 @@ sys.path.append(
 from dotenv import load_dotenv
 load_dotenv()
 
+# Import Opik for token tracking
+try:
+    import opik
+except ImportError:
+    opik = None
+
 # Import ACE framework with new integration
 from ace import ACEAgent
 from ace.observability import configure_opik
 from browser_use import ChatBrowserUse
+
+def get_ace_token_usage(run_start_time: datetime.datetime = None) -> tuple[int, int, int, int]:
+    """Query Opik for ACE token usage only.
+
+    Returns:
+        tuple: (ace_tokens, generator_tokens, reflector_tokens, curator_tokens)
+    """
+    try:
+        if not opik:
+            print("   ⚠️ Opik not available for token tracking")
+            return 0, 0, 0, 0
+
+        # Create client and flush to ensure data is sent
+        client = opik.Opik()
+        client.flush()
+
+        print(f"   📋 Querying Opik for ACE token usage...")
+
+        # Use run start time if available, otherwise fall back to last 10 minutes
+        if run_start_time:
+            recent_time = run_start_time.isoformat().replace("+00:00", "Z")
+            print(f"   🕐 Searching for traces since run start: {recent_time}")
+        else:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            recent_time = (
+                (now - datetime.timedelta(minutes=10))
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+            print(
+                f"   🕐 Searching for traces since: {recent_time} (fallback: last 10 minutes)"
+            )
+
+        all_traces = []
+
+        # Only search ACE project for role breakdown
+        for project in ["ace-roles"]:
+            try:
+                traces = client.search_traces(
+                    project_name=project,
+                    filter_string=f'start_time >= "{recent_time}"',
+                    max_results=50,
+                )
+                print(
+                    f"   📊 Found {len(traces)} recent traces in '{project}' project"
+                )
+                all_traces.extend(traces)
+            except Exception as e:
+                print(f"   ⚠️ Failed to search '{project}' project: {e}")
+
+        # Track individual ACE role tokens
+        generator_tokens = 0
+        reflector_tokens = 0
+        curator_tokens = 0
+
+        print(f"   🔍 Processing {len(all_traces)} total traces...")
+
+        # First pass: identify and process ACE role traces
+        for trace in all_traces:
+            trace_name = getattr(trace, "name", "unknown")
+            trace_name_lower = trace_name.lower()
+
+            if any(
+                role in trace_name_lower
+                for role in ["generator", "reflector", "curator"]
+            ):
+                print(f"      📋 ACE Trace: '{trace_name}'")
+
+                # Get usage from trace or spans
+                total_tokens = 0
+
+                if trace.usage:
+                    total_tokens = trace.usage.get("total_tokens", 0)
+                    print(f"         💰 Tokens: {total_tokens}")
+                else:
+                    # Check spans for this trace
+                    try:
+                        spans = client.search_spans(trace_id=trace.id)
+                        for span in spans:
+                            if hasattr(span, "usage") and span.usage:
+                                span_tokens = span.usage.get("total_tokens", 0)
+                                total_tokens += span_tokens
+
+                        if total_tokens > 0:
+                            print(f"         💰 Tokens (from spans): {total_tokens}")
+                    except Exception as e:
+                        print(f"         ⚠️ Failed to get spans: {e}")
+
+                # Classify by role
+                if "generator" in trace_name_lower:
+                    generator_tokens += total_tokens
+                    print(f"         🎯 Added to Generator")
+                elif "reflector" in trace_name_lower:
+                    reflector_tokens += total_tokens
+                    print(f"         🔍 Added to Reflector")
+                elif "curator" in trace_name_lower:
+                    curator_tokens += total_tokens
+                    print(f"         📝 Added to Curator")
+
+        # Calculate total ACE tokens
+        ace_tokens = generator_tokens + reflector_tokens + curator_tokens
+
+        print(f"   📊 ACE Role breakdown:")
+        print(f"      🎯 Generator: {generator_tokens} tokens")
+        print(f"      🔍 Reflector: {reflector_tokens} tokens")
+        print(f"      📝 Curator: {curator_tokens} tokens")
+
+        return (ace_tokens, generator_tokens, reflector_tokens, curator_tokens)
+
+    except Exception as e:
+        print(f"   Warning: Could not retrieve token usage from Opik: {e}")
+        return 0, 0, 0, 0
+
 
 # Shopping task definition
 GROCERY_SHOPPING_TASK = """
@@ -65,6 +186,9 @@ TOTAL: CHF [total]
 
 async def main():
     """Run grocery shopping with ACE learning."""
+
+    # Capture start time for trace filtering
+    run_start_time = datetime.datetime.now(datetime.timezone.utc)
 
     # Configure observability
     try:
@@ -113,9 +237,45 @@ async def main():
             print(history.final_result())
 
         # Show performance metrics
+        steps = 0
+        browseruse_tokens = 0
+        ace_tokens = 0
+
         if hasattr(history, 'number_of_steps'):
             steps = history.number_of_steps()
-            print(f"\n📊 Performance: {steps} steps taken")
+
+        # Extract browser-use tokens from history
+        if hasattr(history, 'usage'):
+            try:
+                usage = history.usage
+                if usage:
+                    if hasattr(usage, 'total_tokens'):
+                        browseruse_tokens = usage.total_tokens
+                    elif isinstance(usage, dict) and 'total_tokens' in usage:
+                        browseruse_tokens = usage['total_tokens']
+                    elif hasattr(usage, 'input_tokens') and hasattr(usage, 'output_tokens'):
+                        browseruse_tokens = usage.input_tokens + usage.output_tokens
+                    elif isinstance(usage, dict) and 'input_tokens' in usage and 'output_tokens' in usage:
+                        browseruse_tokens = usage['input_tokens'] + usage['output_tokens']
+            except Exception as e:
+                print(f"⚠️ Could not extract browser-use tokens: {e}")
+
+        # Query ACE tokens after shopping completed
+        print(f"\n💰 Querying ACE token usage after shopping...")
+        time.sleep(5)  # Wait for Opik to index final traces
+        (
+            ace_tokens,
+            generator_tokens,
+            reflector_tokens,
+            curator_tokens,
+        ) = get_ace_token_usage(run_start_time)
+
+        print(f"\n📊 PERFORMANCE METRICS:")
+        print("-" * 60)
+        print(f"🔄 Steps taken: {steps}")
+        print(f"🤖 Browser-use tokens: {browseruse_tokens:,}")
+        print(f"🧠 ACE learning tokens: {ace_tokens:,}")
+        print(f"💰 Total tokens: {browseruse_tokens + ace_tokens:,}")
 
     except Exception as e:
         print(f"\n❌ Shopping failed: {e}")

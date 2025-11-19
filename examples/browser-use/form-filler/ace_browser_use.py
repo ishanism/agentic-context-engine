@@ -30,7 +30,6 @@ from ace.observability import configure_opik
 
 load_dotenv()
 
-# from debug import print_history_details
 import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
@@ -143,8 +142,6 @@ class BrowserUseEnvironment(TaskEnvironment):
 
         # Run browser automation
         result = asyncio.run(self._run_browser_task(browser_use_prompt))
-
-        # print_history_details(result)
 
         try:
             model_outputs = result.model_outputs()
