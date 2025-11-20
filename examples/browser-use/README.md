@@ -8,19 +8,19 @@ ACE enables browser automation agents to **learn from their execution feedback**
 
 **How it works:**
 ```
-Sample → [Generator] → Strategy → [Browser-Use] → Result
-            ↑                                        ↓
-        Playbook ← [Curator] ← [Reflector] ← Feedback
-        (learns)
+Task → [browser-use Agent] → Execution Result
+         ↑                           ↓
+     Playbook ← [Curator] ← [Reflector] ← Feedback
+     (context)  (updates)   (analyzes)
 ```
 
-Instead of static prompts, ACE agents:
+Instead of static prompts, ACEAgent:
 
-1. **Generate** strategies for browser tasks
-2. **Execute** them using browser-use
-3. **Reflect** on what worked/failed
-4. **Curate** lessons into a persistent playbook
-5. **Improve** on subsequent tasks
+1. **Injects** playbook context into browser-use Agent
+2. **Executes** browser tasks using browser-use
+3. **Reflects** on execution feedback (what worked/failed)
+4. **Curates** lessons into the playbook
+5. **Improves** on subsequent tasks
 
 ## 📁 Folder Structure
 
@@ -28,21 +28,17 @@ Instead of static prompts, ACE agents:
 examples/browser-use/
 ├── README.md                           # Getting started guide (you are here!)
 ├── TEMPLATE.py                         # Clean template for your own use cases
-├── shared.py                           # Generic utilities (domain-agnostic)
-├── debug.py                            # Debug/inspection utilities
-├── Browseruse_domain_demo_results.png  # Domain checker demo results
+├── simple_ace_agent.py                 # Simple ACEAgent example
 ├── online-shopping/                    # Online shopping automation demos
 │   ├── ace-online-shopping.py          # ACE version (WITH learning)
-│   ├── baseline-online-shopping.py     # Baseline version (WITHOUT learning)
-│   ├── results-online-shopping-brwoser-use.png  # Shopping demo results
-│   └── ace_grocery_shopping_playbook.json       # Saved ACE playbook
+│   └── baseline-online-shopping.py     # Baseline version (WITHOUT learning)
 ├── domain-checker/                     # Domain availability examples
 │   ├── ace_domain_checker.py           # ACE version (WITH learning)
 │   ├── baseline_domain_checker.py      # Baseline version (WITHOUT learning)
 │   └── domain_utils.py                 # Domain checking utilities
 └── form-filler/                        # Form filling examples
-    ├── ace_form_filler.py              # ACE version (WITH learning)
-    ├── baseline_form_filler.py         # Baseline version (WITHOUT learning)
+    ├── ace_browser_use.py              # ACE version (WITH learning)
+    ├── baseline_browser_use.py         # Baseline version (WITHOUT learning)
     └── form_utils.py                   # Form data and utilities
 ```
 
@@ -57,13 +53,12 @@ Each example folder contains:
 ### 1. Installation
 
 ```bash
-# Install ACE framework with browser-use demo dependencies
-pip install ace-framework[demos]
+# For end users (recommended)
+pip install ace-framework[browser-use]
 
-# Or for development (using UV - recommended)
+# For contributors running browser demos (UV)
 cd agentic-context-engine
-uv sync --extra demos      # Install with demos dependencies
-# Or: uv sync --all-extras  # Install all optional dependencies
+uv sync --group demos      # Installs browser-use, playwright, rich, etc.
 ```
 
 ### 2. Set API Key
@@ -81,7 +76,7 @@ export OPENAI_API_KEY="your-api-key"
 uv run python examples/browser-use/domain-checker/ace_domain_checker.py
 
 # Form filler WITH ACE
-uv run python examples/browser-use/form-filler/ace_form_filler.py
+uv run python examples/browser-use/form-filler/ace_browser_use.py
 ```
 
 ## 🎬 Live Demos
@@ -140,10 +135,10 @@ A real-world comparison where both Browser Use agents check 10 domains for avail
 Try it yourself:
 ```bash
 # Run baseline version (no learning)
-uv run python examples/browser-use/baseline_domain_checker.py
+uv run python examples/browser-use/domain-checker/baseline_domain_checker.py
 
 # Run ACE-enhanced version (learns and improves)
-uv run python examples/browser-use/ace_domain_checker.py
+uv run python examples/browser-use/domain-checker/ace_domain_checker.py
 ```
 
 ## 📊 Results
@@ -166,23 +161,20 @@ uv run python examples/browser-use/ace_domain_checker.py
 Copy `TEMPLATE.py` and customize for your task:
 
 ```python
-# 1. Define your evaluation environment
-class MyTaskEnvironment(TaskEnvironment):
-    def evaluate(self, sample, generator_output):
-        # Your task-specific evaluation logic
-        pass
+from ace import ACEAgent
+from browser_use import ChatBrowserUse
 
-# 2. Create ACE components
-llm = LiteLLMClient(model="gpt-4o")
-adapter = OnlineAdapter(
-    playbook=Playbook(),
-    generator=Generator(llm),
-    reflector=Reflector(llm),
-    curator=Curator(llm)
+# 1. Create ACE agent - handles everything automatically!
+agent = ACEAgent(
+    llm=ChatBrowserUse(),                    # Browser automation LLM
+    ace_model="claude-haiku-4-5-20251001",   # ACE learning LLM
+    playbook_path=str(playbook_path) if playbook_path.exists() else None,
+    max_steps=25,                            # Browser automation steps
+    calculate_cost=True                      # Track usage
 )
 
-# 3. Run and learn!
-results = adapter.run(samples, environment)
+# 2. Run and learn!
+result = await agent.run(task=your_task_description)
 ```
 
 ### Option 2: Adapt an Example
@@ -200,63 +192,36 @@ Browse `domain-checker/` or `form-filler/` examples and modify them for your nee
 
 ### ACE Components
 
-1. **Generator**: Plans browser automation strategies
+**ACEAgent**: Integration wrapper that adds ACE learning to browser-use:
+1. **browser-use Agent**: Executes browser automation tasks
 2. **Reflector**: Analyzes execution feedback (errors, successes, efficiency)
 3. **Curator**: Updates playbook with learned lessons
-4. **Playbook**: Persistent knowledge base (bullets with helpful/harmful scores)
+4. **Playbook**: Persistent knowledge base injected as context
 
-### Adaptation Modes
+ACEAgent uses the Integration Pattern - browser-use handles execution, ACE handles learning!
 
-- **OnlineAdapter**: Learn after each task (used in these examples)
-- **OfflineAdapter**: Train on batch of examples first, then deploy
+### Learning Modes
 
-### Environment Integration
+**ACEAgent** automatically learns from each task execution:
+- Analyzes what worked and what failed
+- Updates strategies in the playbook
+- Applies learned lessons to future tasks
 
-Your `TaskEnvironment` bridges ACE with browser-use:
-- Receives strategy from Generator
-- Executes browser automation
-- Returns feedback to Reflector
+### Browser Integration
+
+ACEAgent integrates seamlessly with browser-use:
+- Uses browser-use for actual automation (clicking, typing, etc.)
+- Learns from browser execution feedback
+- Builds strategies specific to web automation tasks
 
 ## 💡 Tips
 
 1. **Start Simple**: Begin with baseline demo, then compare with ACE version
 2. **Headless Mode**: Set `headless=True` for faster execution (no GUI)
-3. **Debug Mode**: Use `debug.print_history_details()` to inspect browser actions
-4. **Cost Tracking**: Enable Opik observability to monitor token usage
-5. **Prompt Versions**: Use v2.1 prompts for best performance - they include MCP-inspired enhancements for better reasoning and error handling
+3. **Cost Tracking**: Enable Opik observability to monitor token usage
+4. **Prompt Versions**: Use v2.1 prompts for best performance - they include MCP-inspired enhancements for better reasoning and error handling
 
 ## 📝 Common Utilities
-
-### `shared.py` - Common Utilities
-
-Contains helper functions and constants used across browser automation examples:
-
-```python
-from shared import (
-    # Timeout and retry handling
-    calculate_timeout_steps,   # Convert timeout duration to estimated step count
-    MAX_RETRIES,              # Default retry attempts (3)
-    DEFAULT_TIMEOUT_SECONDS,   # Default browser timeout (180s)
-
-    # Output formatting and storage
-    format_result_output,      # Pretty-print browser results
-    save_results_to_file,      # Save results to JSON
-
-    # Browser configuration
-    get_browser_config,        # Standard browser settings
-)
-```
-
-### `debug.py` - Debug Utilities
-
-```python
-from debug import print_history_details
-
-# Print comprehensive browser execution details
-history = await agent.run()
-print_history_details(history)
-# Shows: actions, results, URLs, errors, thoughts, timing, etc.
-```
 
 ### Example-Specific Utilities
 
@@ -276,11 +241,11 @@ Have a cool browser automation use case? Add a new example folder!
 
 **Import errors after restructuring?**
 - Files in subfolders use `sys.path.insert()` to import from parent
-- Check that `shared.py` and `debug.py` are in `browser-use/` root
+- Check that dependencies are installed correctly
 
 **Browser not starting?**
 - Browser-use automatically downloads Chromium via Playwright on first run
-- If issues persist, check browser-use installation: `pip install browser-use`
+- If issues persist, install demos group: `uv sync --group demos` (contributors)
 
 **LLM API errors?**
 - Verify API key is set: `echo $OPENAI_API_KEY`

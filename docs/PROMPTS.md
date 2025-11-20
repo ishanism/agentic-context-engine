@@ -77,6 +77,40 @@ curator = Curator(llm, prompt_template=prompt_mgr.get_curator_prompt())
 
 ---
 
+## Version Comparison
+
+Quick guide to choosing the right prompt version:
+
+| Feature | v1.0 | v2.0 (Deprecated) | v2.1 (Recommended) |
+|---------|------|-------------------|-------------------|
+| **Status** | Stable | Deprecated | Recommended |
+| **Performance** | Baseline | +12% vs v1 | **+17% vs v1** |
+| **Lines of Code** | 146 | 969 | 1,469 |
+| **Use Case** | Tutorials, simple tasks | N/A (use v2.1) | Production systems |
+| **MCP Support** | ❌ No | ❌ No | ✅ Yes |
+| **Error Handling** | Basic | Enhanced | Advanced |
+| **Meta-Cognition** | None | Basic | Advanced |
+| **Examples Included** | ❌ No | ✅ Yes | ✅ Yes |
+| **Identity Headers** | ❌ No | ✅ Yes | ✅ Enhanced |
+| **Validation** | Basic | Strict | Strict + Recovery |
+| **Best For** | Learning ACE basics | Don't use | All production use |
+
+**Recommendation**: Use v2.1 for all new projects. Only use v1 for educational/tutorial purposes where simplicity is more important than performance.
+
+**Migration**: Switching from v1 → v2.1 is straightforward:
+```python
+# Before (v1)
+from ace.prompts import GENERATOR_PROMPT
+generator = Generator(llm, prompt_template=GENERATOR_PROMPT)
+
+# After (v2.1)
+from ace.prompts_v2_1 import PromptManager
+mgr = PromptManager()
+generator = Generator(llm, prompt_template=mgr.get_generator_prompt())
+```
+
+---
+
 ## Template Variables
 
 All ACE prompts use Python's `.format()` syntax with these variables:
@@ -418,7 +452,7 @@ print(playbook.as_prompt())
 - **Research Paper**: [Agentic Context Engineering](https://arxiv.org/abs/2510.04618)
 - **API Documentation**: See `ace/roles.py` docstrings
 - **Examples**: `examples/` directory
-- **Changelog**: See `ACE_V2_1_IMPROVEMENTS.md`
+- **Changelog**: See `CHANGELOG.md`
 
 ---
 

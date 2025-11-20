@@ -324,13 +324,13 @@ Return ONLY valid JSON:
 ### 1. A/B Testing Framework
 
 ```python
-from ace.prompts_v2 import PromptManager
+from ace.prompts_v2_1 import PromptManager
 
 # Test different versions
 manager = PromptManager()
 
-# Version A - Standard v2
-prompt_a = manager.get_generator_prompt(version="2.0")
+# Version A - Standard v2.1
+prompt_a = manager.get_generator_prompt(version="2.1")
 
 # Version B - Custom variant
 prompt_b = custom_prompt_with_modifications
@@ -347,7 +347,7 @@ compare_confidence_calibration(results_a, results_b)
 ### 2. Validation Utilities
 
 ```python
-from ace.prompts_v2 import validate_prompt_output
+from ace.prompts_v2_1 import validate_prompt_output
 
 # Test output compliance
 output = llm.generate(prompt)
@@ -370,14 +370,14 @@ Track these metrics to evaluate prompt effectiveness:
 
 ### 4. Iterative Refinement Process
 
-1. **Baseline**: Start with v2 template
+1. **Baseline**: Start with v2.1 template
 2. **Observe**: Identify failure patterns
 3. **Hypothesize**: Form specific improvements
 4. **Test**: A/B test modifications
 5. **Adopt**: Integrate successful changes
 6. **Document**: Record what worked and why
 
-## Migration from v1 to v2
+## Migration to v2.1
 
 ### Quick Start
 
@@ -386,16 +386,19 @@ Track these metrics to evaluate prompt effectiveness:
 from ace.prompts import GENERATOR_PROMPT
 generator = Generator(llm, prompt_template=GENERATOR_PROMPT)
 
-# New approach (v2)
-from ace.prompts_v2 import PromptManager
-manager = PromptManager(default_version="2.0")
+# Recommended approach (v2.1) - +17% success rate vs v1
+from ace.prompts_v2_1 import PromptManager
+manager = PromptManager(default_version="2.1")
 generator = Generator(llm, prompt_template=manager.get_generator_prompt())
 ```
 
-### Key Improvements in v2
+**Note:** v2.0 prompts are deprecated. Use v2.1 for best performance.
 
-| Feature | v1 | v2 |
+### Key Improvements
+
+| Feature | v1 | v2.1 |
 |---------|----|----|
+| Performance | Baseline | +17% success rate |
 | Structure | Basic sections | Hierarchical with metadata |
 | Examples | None | Good/bad examples included |
 | Error Handling | Basic JSON check | Detailed recovery procedures |
@@ -404,6 +407,7 @@ generator = Generator(llm, prompt_template=manager.get_generator_prompt())
 | Domains | One-size-fits-all | Specialized variants |
 | Anti-patterns | Not specified | Explicitly prohibited |
 | Confidence | Not tracked | Built-in confidence scores |
+| MCP Support | No | Yes (v2.1 enhancement) |
 
 ### Gradual Migration Strategy
 
@@ -500,7 +504,7 @@ class VersionedPromptManager:
 - [Original ACE Paper](https://arxiv.org/abs/2510.04618)
 - [Prompt Engineering Best Practices](https://platform.openai.com/docs/guides/prompt-engineering)
 - [LiteLLM Documentation](https://docs.litellm.ai/)
-- [Example Implementations](../examples/advanced_prompts_v2.py)
+- [Example Implementations](../examples/) - See examples directory for prompt engineering patterns
 
 ## Contributing
 

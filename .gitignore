@@ -84,6 +84,7 @@ kayba_learned.json
 kayba_test_playbook.json
 my_agent.json
 my_trained_agent.json
+*.log
 
 # Checkpoint files (generated during training)
 **/checkpoints/*.json

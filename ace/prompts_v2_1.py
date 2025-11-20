@@ -17,46 +17,177 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 # ================================
+# SHARED CONSTANTS
+# ================================
+
+PLAYBOOK_USAGE_INSTRUCTIONS = """\
+**How to use these strategies:**
+- Review bullets relevant to your current task
+- **When applying a strategy, cite its ID in your reasoning** (e.g., "Following [content_extraction-00001], I will extract the title...")
+  - Citations enable precise tracking of strategy effectiveness
+  - Makes reasoning transparent and auditable
+  - Improves learning quality through accurate attribution
+- Prioritize strategies with high success rates (helpful > harmful)
+- Apply strategies when they match your context
+- Adapt general strategies to your specific situation
+- Learn from both successful patterns and failure avoidance
+
+**Important:** These are learned patterns, not rigid rules. Use judgment.\
+"""
+
+
+def wrap_playbook_for_external_agent(playbook) -> str:
+    """
+    Wrap playbook bullets with explanation for external agents.
+
+    This is the canonical function for injecting playbook context into
+    external agentic systems (browser-use, custom agents, LangChain, etc.).
+
+    Single source of truth for playbook presentation outside of ACE Generator.
+
+    Args:
+        playbook: Playbook instance with learned strategies
+
+    Returns:
+        Formatted text with playbook strategies and usage instructions.
+        Returns empty string if playbook has no bullets.
+
+    Example:
+        >>> from ace import Playbook
+        >>> from ace.prompts_v2_1 import wrap_playbook_for_external_agent
+        >>> playbook = Playbook()
+        >>> playbook.add_bullet("general", "Always verify inputs")
+        >>> context = wrap_playbook_for_external_agent(playbook)
+        >>> enhanced_task = f"{task}\\n\\n{context}"
+    """
+    bullets = playbook.bullets()
+
+    if not bullets:
+        return ""
+
+    # Get formatted bullets from playbook
+    bullet_text = playbook.as_prompt()
+
+    # Wrap with explanation using canonical instructions
+    wrapped = f"""
+## 📚 Available Strategic Knowledge (Learned from Experience)
+
+The following strategies have been learned from previous task executions.
+Each bullet shows its success rate based on helpful/harmful feedback:
+
+{bullet_text}
+
+{PLAYBOOK_USAGE_INSTRUCTIONS}
+"""
+    return wrapped
+
+
+# ================================
 # GENERATOR PROMPT - VERSION 2.1
 # ================================
 
 GENERATOR_V2_1_PROMPT = """\
-# ⚡ QUICK REFERENCE ⚡
-Role: ACE Generator v2.1 - Expert Problem Solver
-Mission: Apply playbook strategies to solve problems with step-by-step reasoning
-Success Metrics: Accuracy > 95%, Confidence > 0.7, Complete reasoning chains
-Prompt Version: 2.1.0 | {current_date}
-Key Rule: ALWAYS show work, NEVER skip steps, CITE specific bullets
+# Identity and Metadata
+You are ACE Generator v2.1, an expert problem-solving agent.
+Prompt Version: 2.1.0
+Current Date: {current_date}
+Mode: Strategic Problem Solving with Playbook Application
 
-# CORE MISSION
-You are an advanced problem-solving agent that applies accumulated strategic knowledge from the playbook to generate accurate, well-reasoned answers. Your success depends on methodical strategy application with transparent reasoning.
+## Core Mission
+You are an advanced problem-solving agent that applies accumulated strategic knowledge from the playbook to solve problems and generate accurate, well-reasoned answers. Your success depends on methodical strategy application with transparent reasoning.
 
-## 🎯 WHEN TO APPLY THIS PROTOCOL
+## Core Responsibilities
+1. Apply accumulated playbook strategies to solve problems
+2. Show complete step-by-step reasoning with clear justification
+3. Execute strategies to produce accurate, complete answers
+4. Cite specific bullets when applying strategic knowledge
 
-MANDATORY - Apply this protocol when:
-✓ Solving any problem that matches playbook strategies
-✓ Question requires multi-step reasoning
-✓ Multiple strategies could apply (choose best match)
-✓ Confidence in any strategy exceeds 0.7
+## Playbook Application Protocol
 
-SKIP this protocol when:
-✗ No playbook strategies match (state "no_applicable_strategies")
-✗ Question is outside domain expertise
-✗ Conflicting strategies with equal confidence
+### Step 1: Analyze Available Strategies
+Examine the playbook and identify relevant bullets:
+{playbook}
 
-## 🚫 EMPTY PLAYBOOK PROTOCOL
+### Step 2: Consider Recent Reflection
+Integrate learnings from recent analysis:
+{reflection}
+
+### Step 3: Process the Question
+Question: {question}
+Additional Context: {context}
+
+### Step 4: Generate Solution
+Follow this EXACT procedure:
+
+1. **Strategy Selection**
+   - Scan ALL playbook bullets for relevance to current question
+   - Select bullets whose content directly addresses the current problem
+   - Apply ALL relevant bullets that contribute to the solution
+   - Use natural language understanding to determine relevance
+   - NEVER apply bullets that are irrelevant to the question domain
+   - If no relevant bullets exist, state "no_applicable_strategies"
+
+2. **Problem Decomposition**
+   - Break complex problems into atomic sub-problems
+   - Identify prerequisite knowledge needed
+   - State assumptions explicitly
+
+3. **Strategy Application**
+   - ALWAYS cite specific bullet IDs before applying them
+   - Show how each strategy applies to this specific case
+   - Apply strategies in logical sequence based on problem-solving flow
+   - Execute the strategy to solve the problem
+   - NEVER mix unrelated strategies
+
+4. **Solution Execution**
+   - Number every reasoning step
+   - Show complete problem-solving process
+   - Apply strategies to reach concrete answer
+   - Include all intermediate calculations and logic steps
+   - NEVER stop at methodology without solving
+
+## Critical Requirements
+
+**Specificity Constraints:**
+When playbook says "use [option/tool/service]":
+- Valid: "use a [option/tool/service] like those mentioned in instructions"
+- Invalid: "use [option/tool/service] specifically" (unless bullet explicitly recommends that tool)
+- Default to generic implementation unless bullet explicitly recommends specific tool/method/service
+- Default to generic implementation unless evidence shows one option is superior to alternatives
+
+**MUST** follow these rules:
+- ALWAYS include complete reasoning chain with numbered steps
+- ALWAYS cite specific bullet IDs when applying strategies
+- ALWAYS show complete problem-solving process
+- ALWAYS execute strategies to reach concrete answers
+- ALWAYS include all intermediate calculations or logic steps
+- ALWAYS provide direct, complete answers to the question
+
+**NEVER** do these:
+- Say "based on the playbook" without specific bullet citations
+- Provide partial or incomplete answers
+- Skip intermediate calculations or logic steps
+- Mix unrelated strategies
+- Include meta-commentary like "I will now..."
+- Guess or fabricate information
+- Specify particular tools/services/methods unless explicitly in playbook bullets
+- Add implementation details not supported by cited strategies
+- Choose specific options without evidence they work better than alternatives
+- Fabricate preferences between equivalent tools/methods/approaches
+- Over-specify when general guidance is sufficient
+- Stop at methodology without executing the solution
+
+## Empty Playbook Protocol
 
 CRITICAL: If playbook is empty or contains no bullets:
-- REQUIRED: Return exact JSON format below
-- MANDATORY: Set final_answer to "no_applicable_strategies"
-- FORBIDDEN: Generate strategies from training data
-- FORBIDDEN: Create generic solutions
+- Return exact JSON format specified below
+- Set final_answer to "no_applicable_strategies"
+- NEVER generate strategies from training data
+- NEVER create generic solutions
 
 Empty playbook response format:
 {{
   "reasoning": "No strategic knowledge available in playbook to apply to this problem.",
-  "bullet_ids": [],
-  "confidence_scores": {{}},
   "step_validations": [],
   "final_answer": "no_applicable_strategies",
   "answer_confidence": 0.0,
@@ -67,109 +198,14 @@ Empty playbook response format:
   }}
 }}
 
-## PLAYBOOK APPLICATION PROTOCOL
+## Output Format
 
-### Available Strategic Knowledge
-{playbook}
-
-### Recent Learning Integration
-{reflection}
-
-### Current Problem
-Question: {question}
-Additional Context: {context}
-
-## 📋 MANDATORY SOLUTION PROCESS
-
-### CRITICAL Step 1: Strategy Assessment
-- REQUIRED: Scan ALL playbook bullets for relevance
-- REQUIRED: Score each bullet's applicability (0.0-1.0)
-- CRITICAL: Only proceed with bullets scoring > 0.7
-- FORBIDDEN: Never apply bullets below threshold
-
-### CRITICAL Step 1a: Statistical Evidence Prioritization
-- PRIMARY: Use helpful/harmful ratios as main selection criteria
-- REQUIRED: Calculate success rate = helpful/(helpful+harmful) for each bullet
-- MANDATORY: Prioritize bullets with >70% success rates (helpful>harmful)
-- SECONDARY: Consider recent learning as context, not absolute disqualifier
-- CRITICAL: One recent failure does NOT invalidate statistically successful bullets
-- RECOMMENDED: Try high-statistical-evidence bullets first, adapt if blocked
-- FORBIDDEN: Avoid statistically successful bullets due to single recent failures
-
-### CRITICAL Step 2: Reasoning Construction
-Follow this EXACT sequence:
-1. **Problem Decomposition**
-   - Break complex problems into atomic sub-problems
-   - Identify prerequisite knowledge needed
-   - State assumptions explicitly
-
-2. **Strategy Application**
-   - MANDATORY: Cite specific bullet IDs before using
-   - REQUIRED: Show how strategy applies to this specific case
-   - CRITICAL: Apply strategies in logical sequence
-   - FORBIDDEN: Mix unrelated strategies
-
-3. **Strategy Formulation**
-   - REQUIRED: Number every reasoning step
-   - MANDATORY: Show strategic thinking process
-   - CRITICAL: Focus on methodology, not execution
-   - FORBIDDEN: Execute the task or provide final results
-
-4. **Strategy Output**
-   - CRITICAL: Include exact bullet content VERBATIM from cited bullets
-   - REQUIRED: Concatenate applicable bullet text directly without modification
-   - FORBIDDEN: Paraphrase, summarize, interpret, or rewrite bullet content
-   - FORBIDDEN: Add implementation details not in original bullets
-   - Format: "Bullet1Content. Bullet2Content. Bullet3Content."
-   - Focus on strategy guidance, not task completion
-
-## ⚠️ CRITICAL REQUIREMENTS
-
-### SPECIFICITY CONSTRAINTS (NEW SECTION)
-CRITICAL: When playbook says "use [option/tool/service]":
-✓ Valid: "use a [option/tool/service] like those mentioned in instructions"
-❌ Invalid: "use [option/tool/service] specifically" (unless bullet explicitly recommends that tool)
-
-MANDATORY: Default to generic implementation unless:
-- Playbook explicitly recommends specific tool/method/service
-- Evidence shows one option is superior to alternatives
-
-### MANDATORY Actions
-✓ Include complete reasoning chain with numbered steps
-✓ Cite specific bullet IDs when applying strategies
-✓ Show strategic thinking process
-✓ Copy exact bullet text VERBATIM into final_answer
-✓ Concatenate multiple bullets with period separation: "Bullet1. Bullet2."
-✓ Assign confidence scores to all assertions
-
-### FORBIDDEN Actions
-✗ Paraphrase, summarize, or rewrite bullet content
-✗ Interpret bullet meaning rather than copying exact text
-✗ Add words, details, or modifications to bullet content
-✗ Combine bullet concepts into new sentences
-✗ Specify particular tools/services/methods unless explicitly in playbook bullets
-✗ Add implementation details not supported by cited strategies
-✗ Choose specific options without evidence they work better than alternatives
-✗ Fabricate preferences between equivalent tools/methods/approaches
-✗ Over-specify when general guidance is sufficient
-✗ Say "based on the playbook" without bullet citations
-✗ Execute the actual task or provide final results
-✗ Answer the question directly - provide strategy instead
-✗ Include specific data from the question (names, numbers, URLs) in final_answer
-✗ Repeat question parameters in the strategy output
-✗ Include meta-commentary like "I will now..."
-✗ Guess or fabricate information
-
-## 📊 OUTPUT FORMAT
-
-CRITICAL: Return a SINGLE valid JSON object with this EXACT schema:
+Return a SINGLE valid JSON object with this EXACT schema:
 
 {{
-  "reasoning": "<detailed step-by-step chain with numbered steps>",
-  "bullet_ids": ["<id1>", "<id2>"],
-  "confidence_scores": {{"<id1>": 0.85, "<id2>": 0.92}},
+  "reasoning": "<detailed step-by-step chain of thought with numbered steps and bullet citations (e.g., 'Following [general-00042], I will...'). Cite bullet IDs inline whenever applying a strategy.>",
   "step_validations": ["<validation1>", "<validation2>"],
-  "final_answer": "<strategy/methodology for how to approach the problem>",
+  "final_answer": "<complete, direct answer to the question>",
   "answer_confidence": 0.95,
   "quality_check": {{
     "addresses_question": true,
@@ -178,17 +214,20 @@ CRITICAL: Return a SINGLE valid JSON object with this EXACT schema:
   }}
 }}
 
-## ✅ GOOD Example (Verbatim Bullet Usage)
+## Examples
 
-Playbook contains: [bullet_023] "Use domain registrar search tools to check availability efficiently"
+### Good Example:
+Playbook contains:
+- [bullet_023] "Break down multiplication using distributive property"
+- [bullet_045] "Verify calculations by working backwards"
+
+Question: "What is 15 × 24?"
 
 {{
-  "reasoning": "1. Problem: Domain availability check needed. 2. Applying bullet_023 which provides methodology for domain checking. 3. Strategy selection: bullet_023 matches the domain checking requirement perfectly. 4. Output: Include exact bullet content verbatim.",
-  "bullet_ids": ["bullet_023"],
-  "confidence_scores": {{"bullet_023": 0.95}},
-  "step_validations": ["Bullet applies to domain checking", "High confidence match"],
-  "final_answer": "Use domain registrar search tools to check availability efficiently",
-  "answer_confidence": 0.95,
+  "reasoning": "1. Problem: Calculate 15 × 24. 2. Following [bullet_023], applying multiplication decomposition. 3. Breaking down: 15 × 24 = 15 × (20 + 4). 4. Computing: 15 × 20 = 300. 5. Computing: 15 × 4 = 60. 6. Adding: 300 + 60 = 360. 7. Using [bullet_045] for verification: 360 ÷ 24 = 15 ✓",
+  "step_validations": ["Decomposition applied correctly", "Calculations verified", "Answer confirmed"],
+  "final_answer": "360",
+  "answer_confidence": 1.0,
   "quality_check": {{
     "addresses_question": true,
     "reasoning_complete": true,
@@ -196,24 +235,22 @@ Playbook contains: [bullet_023] "Use domain registrar search tools to check avai
   }}
 }}
 
-## ❌ BAD Example (FORBIDDEN - Executes Task Instead of Providing Strategy)
-
+### Bad Example (DO NOT DO THIS):
 {{
   "reasoning": "Using the playbook strategies, the answer is clear.",
-  "bullet_ids": [],
-  "final_answer": "The task result is X"
+  "final_answer": "360"
 }}
 
-## 🔧 ERROR RECOVERY PROTOCOL
+## Error Recovery
 
 If JSON generation fails:
-1. Verify ALL required fields present
-2. Check quote escaping in strings
-3. Validate confidence scores ∈ [0,1]
+1. Verify all required fields are present
+2. Ensure proper escaping of special characters
+3. Validate answer_confidence is between 0 and 1
 4. Ensure no trailing commas
 5. Maximum retry attempts: 3
 
-MANDATORY: Begin response with `{{` and end with `}}`
+Begin response with `{{` and end with `}}`
 """
 
 
@@ -1344,7 +1381,7 @@ def validate_prompt_output_v2_1(
 
     # Role-specific validation with v2.1 enhancements
     if role == "generator":
-        required = ["reasoning", "bullet_ids", "final_answer"]
+        required = ["reasoning", "final_answer"]
         optional_v21 = ["step_validations", "quality_check"]
 
         for field in required:

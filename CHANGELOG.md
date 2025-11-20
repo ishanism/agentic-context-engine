@@ -5,6 +5,41 @@ All notable changes to ACE Framework will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ⚠️ Breaking Changes
+- **Playbook format changed to TOON (Token-Oriented Object Notation)**
+  - `Playbook.as_prompt()` now returns TOON format instead of markdown
+  - **Reason**: 16-62% token savings for improved scalability and reduced inference costs
+  - **Migration**: No action needed if using playbook with Generator/Curator/Reflector
+  - **Debugging**: Use `playbook._as_markdown_debug()` or `str(playbook)` for human-readable output
+  - **Details**: Uses tab delimiters and excludes internal metadata (created_at, updated_at)
+
+### Added
+- **ACELiteLLM integration** - Simple conversational agent with automatic learning
+- **ACELangChain integration** - Wrap LangChain Runnables with ACE learning
+- **Integration exports** - Import ACEAgent, ACELiteLLM, ACELangChain from `ace` package root
+- **TOON compression for playbooks** - 16-62% token reduction vs markdown
+- **Citation-based tracking** - Strategies cited inline as `[section-00001]`, auto-extracted from reasoning
+- **Enhanced browser traces** - Full execution logs (2200+ chars) passed to Reflector
+- **Test coverage** - Improved from 28% to 70% (241 tests total)
+
+### Changed
+- **Renamed SimpleAgent → ACELiteLLM** - Clearer naming for conversational agent integration
+- `Playbook.__str__()` returns markdown (TOON reserved for LLM consumption via `as_prompt()`)
+
+### Fixed
+- **Browser-use trace integration** - Reflector now receives complete execution traces
+  - Fixed initial query duplication (task appeared in both question and reasoning)
+  - Fixed missing trace data (reasoning field now contains 2200+ chars vs 154 chars)
+  - Fixed screenshot attribute bug causing AttributeError on step.state.screenshot
+  - Fixed invalid bullet ID filtering - hallucinated/malformed citations now filtered out
+  - Added comprehensive regression tests to catch these issues
+  - Impact: Reflector can now properly analyze browser agent's thought process
+  - Test coverage improved: 69% → 79% for browser_use.py
+- Prompt v2.1 test assertions updated to match current format
+- All 206 tests now pass (was 189)
+
 ## [0.4.0] - 2025-10-26
 
 ### Added
@@ -69,7 +104,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example demonstrating playbook save/load functionality (`examples/playbook_persistence.py`)
 - py.typed file for PEP 561 type hint support
 - Mermaid flowchart visualization in README showing ACE learning loop
-- ACE_ROADMAP.md (untracked) for development planning
 
 ### Changed
 - Enhanced docstrings with comprehensive examples throughout codebase

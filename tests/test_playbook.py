@@ -6,9 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from ace import Playbook, DeltaBatch, DeltaOperation
 
 
+@pytest.mark.unit
 class TestPlaybook(unittest.TestCase):
     """Test Playbook class functionality."""
 
@@ -54,6 +57,38 @@ class TestPlaybook(unittest.TestCase):
         bullet = self.playbook.get_bullet(self.bullet1.id)
 
         self.assertEqual(bullet.helpful, 7)  # 5 + 2
+
+    def test_bullet_to_llm_dict_excludes_timestamps(self):
+        """Test that to_llm_dict filters out created_at and updated_at."""
+        from ace.playbook import Bullet
+
+        bullet = Bullet(
+            id="test-001",
+            section="test_section",
+            content="Test strategy content",
+            helpful=5,
+            harmful=1,
+            neutral=2,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-02T00:00:00Z",
+        )
+
+        llm_dict = bullet.to_llm_dict()
+
+        # Should include LLM-relevant fields
+        self.assertEqual(llm_dict["id"], "test-001")
+        self.assertEqual(llm_dict["section"], "test_section")
+        self.assertEqual(llm_dict["content"], "Test strategy content")
+        self.assertEqual(llm_dict["helpful"], 5)
+        self.assertEqual(llm_dict["harmful"], 1)
+        self.assertEqual(llm_dict["neutral"], 2)
+
+        # Should exclude timestamps
+        self.assertNotIn("created_at", llm_dict)
+        self.assertNotIn("updated_at", llm_dict)
+
+        # Should have exactly 6 fields
+        self.assertEqual(len(llm_dict), 6)
 
     def test_remove_bullet(self):
         """Test removing bullets."""
@@ -211,14 +246,38 @@ class TestPlaybook(unittest.TestCase):
             os.remove(temp_path)
 
     def test_as_prompt(self):
-        """Test playbook prompt generation."""
+        """Test playbook prompt generation in TOON format."""
         prompt = self.playbook.as_prompt()
 
+        # Check for TOON format with tab-delimited header
+        self.assertIn("bullets[2", prompt)  # Array length
+        self.assertIn("{id", prompt)  # Field declarations
         self.assertIn("general", prompt)
         self.assertIn("math", prompt)
         self.assertIn("Always be clear", prompt)
         self.assertIn("Show your work", prompt)
-        self.assertIn("helpful=5", prompt)
+
+        # Check tab delimiters are used
+        self.assertIn("\t", prompt)
+
+        # Check helpful/harmful values are present as tab-separated numbers
+        lines = prompt.split("\n")
+        data_lines = [line for line in lines if line and not line.startswith("bullets")]
+        self.assertEqual(len(data_lines), 2)  # Two bullet rows
+
+        # Check first bullet: general-00001\tgeneral\tAlways be clear\t5\t0\t0
+        self.assertIn("general-00001", data_lines[0])
+        self.assertIn("Always be clear", data_lines[0])
+        parts = data_lines[0].split("\t")
+        self.assertEqual(parts[3], "5")  # helpful
+        self.assertEqual(parts[4], "0")  # harmful
+
+        # Check second bullet: math-00002\tmath\tShow your work\t3\t1\t0
+        self.assertIn("math-00002", data_lines[1])
+        self.assertIn("Show your work", data_lines[1])
+        parts = data_lines[1].split("\t")
+        self.assertEqual(parts[3], "3")  # helpful
+        self.assertEqual(parts[4], "1")  # harmful
 
     def test_stats(self):
         """Test playbook statistics."""

@@ -165,6 +165,102 @@ for task in tasks:
     # Playbook updates automatically after each task
 ```
 
+## Integrations
+
+ACE provides ready-to-use integrations with popular agentic frameworks. These classes wrap external agents with ACE learning capabilities.
+
+### ACELiteLLM
+
+Quick-start integration for simple conversational agents.
+
+```python
+from ace import ACELiteLLM
+
+# Create an ACE-powered conversational agent
+agent = ACELiteLLM(model="gpt-4o-mini")
+
+# Ask questions - agent learns from each interaction
+answer1 = agent.ask("What is the capital of France?")
+answer2 = agent.ask("What about Spain?")
+
+# Save learned strategies
+agent.playbook.save_to_file("learned_strategies.json")
+
+# Load and continue learning
+agent2 = ACELiteLLM.from_playbook("learned_strategies.json", model="gpt-4o-mini")
+```
+
+**Parameters:**
+- `model`: LiteLLM model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet")
+- `playbook`: Optional existing Playbook to start with
+- `ace_model`: Model for Reflector/Curator (defaults to same as main model)
+- `**llm_kwargs`: Additional arguments passed to LiteLLMClient
+
+### ACEAgent (browser-use)
+
+Self-improving browser automation agent.
+
+```python
+from ace import ACEAgent
+from browser_use import ChatBrowserUse
+
+# Create browser agent
+llm = ChatBrowserUse(model="gpt-4o")
+agent = ACEAgent(llm=llm)
+
+# Run browser tasks - learns from successes and failures
+await agent.run(task="Find the top post on Hacker News")
+await agent.run(task="Search for ACE framework on GitHub")
+
+# Playbook improves with each task
+print(f"Learned {len(agent.playbook.bullets())} strategies")
+```
+
+**Parameters:**
+- `llm`: Browser-use ChatBrowserUse instance
+- `playbook`: Optional existing Playbook
+- `ace_model`: Model for learning (defaults to "gpt-4o-mini")
+
+**Requires:** `pip install browser-use` (optional dependency)
+
+### ACELangChain
+
+Wrap LangChain chains and agents with ACE learning.
+
+```python
+from ace import ACELangChain
+from langchain_openai import ChatOpenAI
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+
+# Create LangChain chain
+llm = ChatOpenAI(temperature=0)
+prompt = PromptTemplate.from_template("Answer this question: {question}")
+chain = LLMChain(llm=llm, prompt=prompt)
+
+# Wrap with ACE
+ace_chain = ACELangChain(runnable=chain)
+
+# Use like normal LangChain - but with learning!
+result1 = ace_chain.invoke({"question": "What is 2+2?"})
+result2 = ace_chain.invoke({"question": "What is 10*5?"})
+
+# Access learned playbook
+ace_chain.save_playbook("langchain_learned.json")
+```
+
+**Parameters:**
+- `runnable`: Any LangChain Runnable (chains, agents, etc.)
+- `playbook`: Optional existing Playbook
+- `ace_model`: Model for learning (defaults to "gpt-4o-mini")
+- `environment`: Custom evaluation environment (optional)
+
+**Requires:** `pip install ace-framework[langchain]`
+
+**See also:** [Integration Guide](INTEGRATION_GUIDE.md) for advanced patterns and custom integrations.
+
+---
+
 ## Environments
 
 ### Creating Environments
@@ -330,18 +426,22 @@ from ace.prompts import GENERATOR_PROMPT, REFLECTOR_PROMPT, CURATOR_PROMPT
 generator = Generator(client, prompt_template=GENERATOR_PROMPT)
 ```
 
-### Using v2 Prompts (Experimental)
+### Using v2.1 Prompts (Recommended)
+
+ACE v2.1 prompts show +17% success rate improvement vs v1.0.
 
 ```python
-from ace.prompts_v2 import PromptManager
+from ace.prompts_v2_1 import PromptManager
 
-manager = PromptManager(default_version="2.0")
+manager = PromptManager(default_version="2.1")
 
 generator = Generator(
     client,
     prompt_template=manager.get_generator_prompt(domain="math")
 )
 ```
+
+**Note:** v2.0 prompts (`ace.prompts_v2`) are deprecated. Use v2.1 for best performance.
 
 ### Custom Prompts
 
@@ -440,9 +540,12 @@ logging.getLogger("ace").setLevel(logging.DEBUG)
 
 See the [examples](../examples/) directory for complete working examples:
 
+**Core Examples:**
 - `simple_ace_example.py` - Basic usage
-- `quickstart_litellm.py` - LiteLLM setup
-- `langchain_example.py` - LangChain integration
 - `playbook_persistence.py` - Save/load strategies
-- `advanced_prompts_v2.py` - v2 prompt features
-- `compare_v1_v2_prompts.py` - Performance comparison
+
+**By Category:**
+- [starter-templates/](../examples/starter-templates/) - Quick start templates
+- [langchain/](../examples/langchain/) - LangChain integration examples
+- [prompts/](../examples/prompts/) - Prompt engineering examples
+- [browser-use/](../examples/browser-use/) - Browser automation
