@@ -43,7 +43,7 @@ cd agentic-context-engine
 uv sync                          # Installs everything automatically
 
 # Run any example or script
-uv run python examples/simple_ace_example.py
+uv run python examples/litellm/simple_ace_example.py
 uv run pytest                    # Run tests
 ```
 
@@ -109,26 +109,29 @@ uv run pre-commit run --all-files   # Manual run
 
 ### Running Examples
 ```bash
-# Quick start with LiteLLM (requires API key)
-python examples/simple_ace_example.py
+# LiteLLM examples (ACELiteLLM)
+python examples/litellm/simple_ace_example.py        # Quick start
+python examples/litellm/async_learning_example.py   # Async learning demo
+python examples/litellm/deduplication_example.py    # Bullet deduplication
+python examples/litellm/playbook_persistence.py     # Save/load playbooks
+python examples/litellm/seahorse_emoji_ace.py       # Kayba test demo
 
-# Kayba Test demo (seahorse emoji challenge)
-python examples/kayba_ace_test.py
+# LangChain examples (ACELangChain)
+python examples/langchain/simple_chain_example.py   # Basic chain wrapping
+python examples/langchain/agent_with_tools_example.py  # Agent with tools
+python examples/langchain/async_learning_example.py # Async learning
 
-# Advanced examples
-python examples/quickstart_litellm.py
-python examples/langchain_example.py
-python examples/playbook_persistence.py
+# Local models (LM Studio, Ollama)
+python examples/local-models/lm_studio_example.py
+python examples/local-models/ollama_starter_template.py
 
-# Compare prompt versions
-python examples/compare_v1_v2_prompts.py
-python examples/advanced_prompts_v2.py
+# Prompt comparison
+python examples/prompts/compare_v1_v2_prompts.py
+python examples/prompts/advanced_prompts_v2.py
 
 # Browser automation demos (contributors: install with `uv sync --group demos`)
-uv run python examples/browser-use/baseline_domain_checker.py    # Baseline automation
-uv run python examples/browser-use/ace_domain_checker.py         # ACE-enhanced automation
-uv run python examples/browser-use/baseline_form_filler.py       # Baseline form filling
-uv run python examples/browser-use/ace_form_filler.py            # ACE-enhanced form filling
+uv run python examples/browser-use/domain-checker/ace_domain_checker.py
+uv run python examples/browser-use/form-filler/ace_form_filler.py
 ```
 
 ### Development Scripts (Research Only)
