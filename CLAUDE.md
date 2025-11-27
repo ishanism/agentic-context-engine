@@ -267,6 +267,76 @@ results = adapter.run(
 - Compare playbook evolution over time
 - Early stopping based on validation metrics
 
+#### Async Learning Mode
+Enable parallel learning where the Generator returns immediately while Reflector and Curator process in the background:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ASYNC LEARNING PIPELINE                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Sample 1 ──► Generator ──► Env ──► Reflector ─┐                           │
+│  Sample 2 ──► Generator ──► Env ──► Reflector ─┼──► [Queue] ──► Curator ──► Playbook
+│  Sample 3 ──► Generator ──► Env ──► Reflector ─┘              (serialized) │
+│             (parallel)           (parallel)                                 │
+│                                                                             │
+│  ✓ Generator returns immediately (fast response)                           │
+│  ✓ Multiple Reflectors run concurrently (parallel LLM calls)               │
+│  ✓ Single Curator processes queue sequentially (safe playbook updates)     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Basic Usage**:
+```python
+from ace import OfflineAdapter
+
+adapter = OfflineAdapter(
+    playbook=playbook,
+    generator=generator,
+    reflector=reflector,
+    curator=curator,
+    async_learning=True,           # Enable async mode
+    max_reflector_workers=3,       # Parallel Reflector threads
+)
+
+# Returns fast - only Generator + evaluation time
+results = adapter.run(samples, environment, epochs=3)
+# Learning completes in background, then run() returns
+```
+
+**Fire-and-Forget Mode** (get results immediately, learning continues):
+```python
+# Don't wait for learning to complete
+results = adapter.run(samples, environment, wait_for_learning=False)
+
+# Use results immediately while learning continues in background
+for r in results:
+    print(r.generator_output.final_answer)
+
+# Check learning progress anytime
+print(adapter.learning_stats)
+# {'tasks_submitted': 30, 'reflections_completed': 25, 'curations_completed': 20, ...}
+
+# Wait when needed (e.g., before saving playbook)
+adapter.wait_for_learning(timeout=60.0)
+playbook.save_to_file("learned.json")
+
+# Cleanup when done
+adapter.stop_async_learning()
+```
+
+**Control Methods**:
+- `adapter.learning_stats` - Dict with queue sizes, completion counts, running status
+- `adapter.wait_for_learning(timeout=None)` - Block until queue is drained
+- `adapter.stop_async_learning(wait=True)` - Shutdown the pipeline
+
+**Why This Architecture**:
+- **Reflector is safe to parallelize**: Reads playbook, produces independent analysis
+- **Curator MUST be serialized**: Writes to playbook, handles deduplication
+- **3x faster learning**: Reflector LLM calls run concurrently
+- **Eventual consistency**: Generator uses whatever playbook state is available
+
 #### Prompt Version Guidance
 The framework includes two prompt versions (see `docs/PROMPTS.md`):
 
