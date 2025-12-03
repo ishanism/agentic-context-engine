@@ -1,0 +1,627 @@
+"""
+Claude Code Hook Integration for ACE framework.
+
+This module enables ACE learning from Claude Code sessions via hooks.
+When configured as a Stop hook, it parses the session transcript and
+updates a skill file that Claude automatically picks up.
+
+Usage:
+    1. Configure hook in ~/.claude/settings.json:
+       {
+         "hooks": {
+           "Stop": [{
+             "matcher": "*",
+             "hooks": [{
+               "type": "command",
+               "command": "ace-learn"
+             }]
+           }]
+         }
+       }
+
+    2. The hook receives transcript_path via stdin JSON
+    3. ACE learns from the execution trace
+    4. Updates ~/.claude/skills/ace-learnings/SKILL.md
+"""
+
+import json
+import sys
+import logging
+import os
+from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
+from dotenv import load_dotenv
+
+# Load .env file from ~/.ace/.env or current directory
+_env_paths = [
+    Path.home() / ".ace" / ".env",
+    Path.cwd() / ".env",
+]
+for _env_path in _env_paths:
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
+
+from ..playbook import Playbook, Bullet
+from ..roles import Reflector, Curator, GeneratorOutput, ReflectorOutput
+from ..llm_providers import LiteLLMClient
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Transcript Parser
+# ============================================================================
+
+@dataclass
+class ToolCall:
+    """A single tool call from the transcript."""
+    name: str
+    input: Dict[str, Any]
+    tool_use_id: str
+    result: Optional[str] = None
+    is_error: bool = False
+
+
+@dataclass
+class Turn:
+    """A single conversation turn (user prompt + assistant response)."""
+    user_prompt: Optional[str]
+    assistant_text: str
+    tool_calls: List[ToolCall]
+    timestamp: Optional[str] = None
+
+
+@dataclass
+class ParsedTranscript:
+    """Parsed Claude Code session transcript."""
+    session_id: str
+    turns: List[Turn]
+    cwd: str
+    total_tool_calls: int
+    successful_tool_calls: int
+    failed_tool_calls: int
+
+    def to_execution_trace(self) -> str:
+        """Convert to execution trace format for Reflector."""
+        parts = []
+        step_num = 0
+
+        for turn in self.turns:
+            if turn.user_prompt:
+                # Truncate very long prompts
+                prompt_preview = turn.user_prompt[:200]
+                if len(turn.user_prompt) > 200:
+                    prompt_preview += "..."
+                parts.append(f"[User] {prompt_preview}")
+
+            if turn.assistant_text:
+                parts.append(f"[Reasoning] {turn.assistant_text[:300]}")
+
+            for tool in turn.tool_calls:
+                step_num += 1
+                status = "✗" if tool.is_error else "✓"
+
+                # Format tool call based on type
+                if tool.name in ["Read", "Glob", "Grep"]:
+                    target = tool.input.get("file_path") or tool.input.get("pattern", "")
+                    parts.append(f"[Step {step_num}] {status} {tool.name}: {target}")
+                elif tool.name in ["Write", "Edit"]:
+                    target = tool.input.get("file_path", "")
+                    parts.append(f"[Step {step_num}] {status} {tool.name}: {target}")
+                elif tool.name == "Bash":
+                    cmd = tool.input.get("command", "")[:80]
+                    parts.append(f"[Step {step_num}] {status} Bash: {cmd}")
+                elif tool.name == "Task":
+                    desc = tool.input.get("description", "")
+                    parts.append(f"[Step {step_num}] {status} Task: {desc}")
+                else:
+                    parts.append(f"[Step {step_num}] {status} {tool.name}")
+
+                # Include error info if failed
+                if tool.is_error and tool.result:
+                    error_preview = tool.result[:100]
+                    parts.append(f"    Error: {error_preview}")
+
+        return "\n".join(parts) if parts else "(No trace captured)"
+
+    def get_feedback(self) -> str:
+        """Generate feedback string for Reflector."""
+        total = self.total_tool_calls
+        failed = self.failed_tool_calls
+        success_rate = ((total - failed) / total * 100) if total > 0 else 100
+
+        feedback = f"Session completed: {total} tool calls, {success_rate:.0f}% success rate"
+        if failed > 0:
+            feedback += f" ({failed} failures)"
+        return feedback
+
+
+class TranscriptParser:
+    """Parse Claude Code JSONL transcript files."""
+
+    def parse(self, transcript_path: str) -> ParsedTranscript:
+        """
+        Parse a Claude Code transcript JSONL file.
+
+        Args:
+            transcript_path: Path to the .jsonl transcript file
+
+        Returns:
+            ParsedTranscript with structured conversation data
+        """
+        path = Path(transcript_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Transcript not found: {transcript_path}")
+
+        entries = []
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+
+        return self._process_entries(entries)
+
+    def _process_entries(self, entries: List[Dict[str, Any]]) -> ParsedTranscript:
+        """Process raw JSONL entries into structured transcript."""
+        session_id = ""
+        cwd = ""
+        turns: List[Turn] = []
+
+        # Track current turn state
+        current_user_prompt: Optional[str] = None
+        current_assistant_text = ""
+        current_tool_calls: List[ToolCall] = []
+        pending_tool_results: Dict[str, Any] = {}  # tool_use_id -> result
+
+        total_tools = 0
+        failed_tools = 0
+
+        for entry in entries:
+            entry_type = entry.get("type", "")
+
+            # Extract session metadata
+            if not session_id:
+                session_id = entry.get("sessionId", "")
+            if not cwd:
+                cwd = entry.get("cwd", "")
+
+            if entry_type == "user":
+                # If we have accumulated data, save the turn
+                if current_assistant_text or current_tool_calls:
+                    turns.append(Turn(
+                        user_prompt=current_user_prompt,
+                        assistant_text=current_assistant_text,
+                        tool_calls=current_tool_calls,
+                        timestamp=entry.get("timestamp")
+                    ))
+                    current_assistant_text = ""
+                    current_tool_calls = []
+
+                # Process user message content
+                message = entry.get("message", {})
+                content = message.get("content", [])
+
+                for block in content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "text":
+                            # Regular user prompt
+                            text = block.get("text", "")
+                            # Skip system injected content
+                            if not text.startswith("<ide_") and not text.startswith("<system"):
+                                current_user_prompt = text
+                        elif block.get("type") == "tool_result":
+                            # Tool result - match to pending tool call
+                            tool_use_id = block.get("tool_use_id", "")
+                            is_error = block.get("is_error", False)
+                            result_content = block.get("content", "")
+
+                            # Store for matching
+                            pending_tool_results[tool_use_id] = {
+                                "result": result_content if isinstance(result_content, str) else str(result_content)[:500],
+                                "is_error": is_error
+                            }
+
+                            if is_error:
+                                failed_tools += 1
+
+            elif entry_type == "assistant":
+                message = entry.get("message", {})
+                content = message.get("content", [])
+
+                for block in content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "text":
+                            text = block.get("text", "")
+                            if text.strip():
+                                current_assistant_text = text
+                        elif block.get("type") == "tool_use":
+                            tool_use_id = block.get("id", "")
+                            tool_call = ToolCall(
+                                name=block.get("name", "unknown"),
+                                input=block.get("input", {}),
+                                tool_use_id=tool_use_id
+                            )
+
+                            # Check if we have a result for this tool
+                            if tool_use_id in pending_tool_results:
+                                result_info = pending_tool_results[tool_use_id]
+                                tool_call.result = result_info["result"]
+                                tool_call.is_error = result_info["is_error"]
+
+                            current_tool_calls.append(tool_call)
+                            total_tools += 1
+
+        # Don't forget the last turn
+        if current_assistant_text or current_tool_calls:
+            turns.append(Turn(
+                user_prompt=current_user_prompt,
+                assistant_text=current_assistant_text,
+                tool_calls=current_tool_calls
+            ))
+
+        return ParsedTranscript(
+            session_id=session_id,
+            turns=turns,
+            cwd=cwd,
+            total_tool_calls=total_tools,
+            successful_tool_calls=total_tools - failed_tools,
+            failed_tool_calls=failed_tools
+        )
+
+
+# ============================================================================
+# Skill File Generator
+# ============================================================================
+
+class SkillGenerator:
+    """Generate Claude Code skill files from ACE playbook."""
+
+    DEFAULT_SKILL_DIR = Path.home() / ".claude" / "skills" / "ace-learnings"
+
+    def __init__(self, skill_dir: Optional[Path] = None):
+        self.skill_dir = skill_dir or self.DEFAULT_SKILL_DIR
+
+    def generate(self, playbook: Playbook) -> str:
+        """
+        Generate SKILL.md content from playbook.
+
+        Args:
+            playbook: ACE Playbook with learned strategies
+
+        Returns:
+            Markdown content for SKILL.md
+        """
+        bullets = playbook.bullets()
+        if not bullets:
+            return self._empty_skill()
+
+        # Sort bullets by effectiveness (helpful - harmful)
+        sorted_bullets = sorted(
+            bullets,
+            key=lambda b: (b.helpful - b.harmful, b.helpful),
+            reverse=True
+        )
+
+        # Group by section
+        sections: Dict[str, List[Bullet]] = {}
+        for bullet in sorted_bullets:
+            sections.setdefault(bullet.section, []).append(bullet)
+
+        # Build skill content
+        parts = [self._frontmatter()]
+        parts.append(self._intro())
+
+        # Top strategies (cross-section, top 10 by effectiveness)
+        top_bullets = sorted_bullets[:10]
+        if top_bullets:
+            parts.append(self._top_strategies(top_bullets))
+
+        # Section-specific strategies
+        for section, section_bullets in sorted(sections.items()):
+            parts.append(self._section(section, section_bullets[:10]))
+
+        # Antipatterns (high harmful count)
+        antipatterns = [b for b in bullets if b.harmful > b.helpful]
+        if antipatterns:
+            parts.append(self._antipatterns(antipatterns[:5]))
+
+        parts.append(self._footer())
+
+        return "\n\n".join(parts)
+
+    def _frontmatter(self) -> str:
+        return """---
+name: ace-learnings
+description: Learned coding strategies from past sessions. Apply when writing code, debugging, testing, navigating codebases, or making architectural decisions. Contains proven patterns and common pitfalls to avoid.
+---"""
+
+    def _intro(self) -> str:
+        return """# ACE Learned Strategies
+
+These strategies have been automatically learned from coding sessions.
+Apply relevant strategies based on the current task."""
+
+    def _empty_skill(self) -> str:
+        return f"""{self._frontmatter()}
+
+# ACE Learned Strategies
+
+No strategies learned yet. Strategies will appear here as you use Claude Code.
+
+{self._footer()}"""
+
+    def _top_strategies(self, bullets: List[Bullet]) -> str:
+        lines = ["## Top Strategies (by effectiveness)"]
+        for i, b in enumerate(bullets, 1):
+            score = f"({b.helpful}↑ {b.harmful}↓)"
+            lines.append(f"{i}. {b.content} {score}")
+        return "\n".join(lines)
+
+    def _section(self, section: str, bullets: List[Bullet]) -> str:
+        # Convert section name to title case
+        title = section.replace("_", " ").title()
+        lines = [f"## {title}"]
+        for b in bullets:
+            score = f"({b.helpful}↑ {b.harmful}↓)"
+            lines.append(f"- {b.content} {score}")
+        return "\n".join(lines)
+
+    def _antipatterns(self, bullets: List[Bullet]) -> str:
+        lines = ["## Antipatterns (avoid these)"]
+        for b in bullets:
+            score = f"({b.harmful} failures)"
+            lines.append(f"- ⚠️ {b.content} {score}")
+        return "\n".join(lines)
+
+    def _footer(self) -> str:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        return f"""---
+*Auto-generated by ACE at {timestamp}*"""
+
+    def save(self, playbook: Playbook) -> Path:
+        """
+        Save skill file to disk.
+
+        Args:
+            playbook: ACE Playbook to generate skill from
+
+        Returns:
+            Path to saved SKILL.md file
+        """
+        self.skill_dir.mkdir(parents=True, exist_ok=True)
+
+        content = self.generate(playbook)
+        skill_path = self.skill_dir / "SKILL.md"
+
+        skill_path.write_text(content, encoding="utf-8")
+        logger.info(f"Saved skill file to {skill_path}")
+
+        return skill_path
+
+
+# ============================================================================
+# Main Hook Learner
+# ============================================================================
+
+class ACEHookLearner:
+    """
+    Main class for learning from Claude Code sessions via hooks.
+
+    Usage:
+        learner = ACEHookLearner()
+        learner.learn_from_hook()  # Reads stdin, processes, updates skill
+    """
+
+    DEFAULT_PLAYBOOK_PATH = Path.home() / ".ace" / "claude_code_playbook.json"
+
+    def __init__(
+        self,
+        playbook_path: Optional[Path] = None,
+        skill_dir: Optional[Path] = None,
+        ace_model: str = "gpt-4o-mini",
+        ace_llm: Optional[LiteLLMClient] = None,
+    ):
+        """
+        Initialize the hook learner.
+
+        Args:
+            playbook_path: Where to store the persistent playbook
+            skill_dir: Where to write the skill file
+            ace_model: Model for ACE Reflector/Curator
+            ace_llm: Custom LLM client (overrides ace_model)
+        """
+        self.playbook_path = playbook_path or self.DEFAULT_PLAYBOOK_PATH
+        self.skill_generator = SkillGenerator(skill_dir)
+        self.transcript_parser = TranscriptParser()
+
+        # Load or create playbook
+        if self.playbook_path.exists():
+            self.playbook = Playbook.load_from_file(str(self.playbook_path))
+            logger.info(f"Loaded playbook with {len(self.playbook.bullets())} bullets")
+        else:
+            self.playbook = Playbook()
+            logger.info("Created new playbook")
+
+        # Create ACE components
+        self.ace_llm = ace_llm or LiteLLMClient(model=ace_model, max_tokens=2048)
+        self.reflector = Reflector(self.ace_llm)
+        self.curator = Curator(self.ace_llm)
+
+    def learn_from_hook(self) -> bool:
+        """
+        Process hook input from stdin and learn.
+
+        Expected stdin JSON:
+        {
+            "session_id": "...",
+            "transcript_path": "/path/to/transcript.jsonl",
+            "cwd": "...",
+            "hook_event_name": "Stop"
+        }
+
+        Returns:
+            True if learning succeeded, False otherwise
+        """
+        try:
+            # Read hook input from stdin
+            hook_input = json.load(sys.stdin)
+            transcript_path = hook_input.get("transcript_path")
+
+            if not transcript_path:
+                logger.error("No transcript_path in hook input")
+                return False
+
+            return self.learn_from_transcript(transcript_path)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse hook input: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Hook learning failed: {e}")
+            return False
+
+    def learn_from_transcript(self, transcript_path: str) -> bool:
+        """
+        Learn from a transcript file directly.
+
+        Args:
+            transcript_path: Path to Claude Code transcript JSONL
+
+        Returns:
+            True if learning succeeded
+        """
+        try:
+            # Parse transcript
+            transcript = self.transcript_parser.parse(transcript_path)
+            logger.info(f"Parsed transcript: {transcript.total_tool_calls} tool calls")
+
+            # Skip if no meaningful activity
+            if transcript.total_tool_calls == 0:
+                logger.info("No tool calls in transcript, skipping learning")
+                return True
+
+            # Get last user prompt as the "task"
+            task = "Claude Code session"
+            for turn in reversed(transcript.turns):
+                if turn.user_prompt:
+                    task = turn.user_prompt[:200]
+                    break
+
+            # Create GeneratorOutput for Reflector
+            generator_output = GeneratorOutput(
+                reasoning=transcript.to_execution_trace(),
+                final_answer=transcript.turns[-1].assistant_text if transcript.turns else "",
+                bullet_ids=[],
+                raw={
+                    "total_tools": transcript.total_tool_calls,
+                    "failed_tools": transcript.failed_tool_calls,
+                }
+            )
+
+            # Run Reflector
+            logger.info("Running Reflector...")
+            reflection = self.reflector.reflect(
+                question=task,
+                generator_output=generator_output,
+                playbook=self.playbook,
+                ground_truth=None,
+                feedback=transcript.get_feedback()
+            )
+
+            # Run Curator
+            logger.info("Running Curator...")
+            curator_output = self.curator.curate(
+                reflection=reflection,
+                playbook=self.playbook,
+                question_context=f"Claude Code session in {transcript.cwd}",
+                progress=f"{transcript.successful_tool_calls}/{transcript.total_tool_calls} successful"
+            )
+
+            # Update playbook
+            self.playbook.apply_delta(curator_output.delta)
+            logger.info(f"Playbook now has {len(self.playbook.bullets())} bullets")
+
+            # Save playbook
+            self.playbook_path.parent.mkdir(parents=True, exist_ok=True)
+            self.playbook.save_to_file(str(self.playbook_path))
+
+            # Update skill file
+            self.skill_generator.save(self.playbook)
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Learning failed: {e}", exc_info=True)
+            return False
+
+
+# ============================================================================
+# CLI Entry Point
+# ============================================================================
+
+def main():
+    """CLI entry point for ace-learn hook."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="ACE learning hook for Claude Code"
+    )
+    parser.add_argument(
+        "--transcript", "-t",
+        help="Path to transcript file (if not using stdin)"
+    )
+    parser.add_argument(
+        "--playbook", "-p",
+        help="Path to playbook file",
+        default=str(ACEHookLearner.DEFAULT_PLAYBOOK_PATH)
+    )
+    parser.add_argument(
+        "--skill-dir", "-s",
+        help="Directory for skill output",
+        default=str(SkillGenerator.DEFAULT_SKILL_DIR)
+    )
+    parser.add_argument(
+        "--model", "-m",
+        help="Model for ACE learning",
+        default="gpt-4o-mini"
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose logging"
+    )
+
+    args = parser.parse_args()
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+
+    # Create learner
+    learner = ACEHookLearner(
+        playbook_path=Path(args.playbook),
+        skill_dir=Path(args.skill_dir),
+        ace_model=args.model
+    )
+
+    # Learn from transcript or hook input
+    if args.transcript:
+        success = learner.learn_from_transcript(args.transcript)
+    else:
+        success = learner.learn_from_hook()
+
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

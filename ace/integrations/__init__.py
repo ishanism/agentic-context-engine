@@ -57,11 +57,33 @@ except ImportError:
     ACELangChain = None  # type: ignore
     LANGCHAIN_AVAILABLE = False
 
+# Import Claude Code integration (always available)
+try:
+    from .claude_code import ACEClaudeCode, ClaudeCodeResult, CLAUDE_CODE_AVAILABLE
+except ImportError:
+    ACEClaudeCode = None  # type: ignore
+    ClaudeCodeResult = None  # type: ignore
+    CLAUDE_CODE_AVAILABLE = False
+
+# Import Claude Code hook integration (always available)
+try:
+    from .claude_code_hook import ACEHookLearner, TranscriptParser, SkillGenerator
+except ImportError:
+    ACEHookLearner = None  # type: ignore
+    TranscriptParser = None  # type: ignore
+    SkillGenerator = None  # type: ignore
+
 __all__ = [
     "wrap_playbook_context",
     "ACELiteLLM",
     "ACEAgent",
     "ACELangChain",
+    "ACEClaudeCode",
+    "ClaudeCodeResult",
+    "ACEHookLearner",
+    "TranscriptParser",
+    "SkillGenerator",
     "BROWSER_USE_AVAILABLE",
     "LANGCHAIN_AVAILABLE",
+    "CLAUDE_CODE_AVAILABLE",
 ]

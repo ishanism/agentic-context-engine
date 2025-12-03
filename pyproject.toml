@@ -77,6 +77,9 @@ all = [
     "accelerate>=0.20.0",
 ]
 
+[project.scripts]
+ace-learn = "ace.integrations.claude_code_hook:main"
+
 [project.urls]
 Homepage = "https://kayba.ai"
 Documentation = "https://github.com/Kayba-ai/agentic-context-engine#readme"
@@ -104,7 +107,7 @@ demos = [
 ]
 
 [tool.setuptools]
-packages = ["ace", "ace.llm_providers", "ace.observability"]
+packages = ["ace", "ace.llm_providers", "ace.observability", "ace.integrations", "ace.deduplication"]
 
 [tool.setuptools.package-data]
 ace = ["py.typed"]
