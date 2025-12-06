@@ -34,6 +34,12 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from dotenv import load_dotenv
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 # Load .env file from ~/.ace/.env or current directory
 _env_paths = [
@@ -48,6 +54,7 @@ for _env_path in _env_paths:
 from ..playbook import Playbook, Bullet
 from ..roles import Reflector, Curator, GeneratorOutput, ReflectorOutput
 from ..llm_providers import LiteLLMClient
+from ..prompts_v2_1 import PromptManager
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +63,11 @@ logger = logging.getLogger(__name__)
 # Transcript Parser
 # ============================================================================
 
+
 @dataclass
 class ToolCall:
     """A single tool call from the transcript."""
+
     name: str
     input: Dict[str, Any]
     tool_use_id: str
@@ -69,6 +78,7 @@ class ToolCall:
 @dataclass
 class Turn:
     """A single conversation turn (user prompt + assistant response)."""
+
     user_prompt: Optional[str]
     assistant_text: str
     tool_calls: List[ToolCall]
@@ -78,6 +88,7 @@ class Turn:
 @dataclass
 class ParsedTranscript:
     """Parsed Claude Code session transcript."""
+
     session_id: str
     turns: List[Turn]
     cwd: str
@@ -107,7 +118,9 @@ class ParsedTranscript:
 
                 # Format tool call based on type
                 if tool.name in ["Read", "Glob", "Grep"]:
-                    target = tool.input.get("file_path") or tool.input.get("pattern", "")
+                    target = tool.input.get("file_path") or tool.input.get(
+                        "pattern", ""
+                    )
                     parts.append(f"[Step {step_num}] {status} {tool.name}: {target}")
                 elif tool.name in ["Write", "Edit"]:
                     target = tool.input.get("file_path", "")
@@ -134,7 +147,9 @@ class ParsedTranscript:
         failed = self.failed_tool_calls
         success_rate = ((total - failed) / total * 100) if total > 0 else 100
 
-        feedback = f"Session completed: {total} tool calls, {success_rate:.0f}% success rate"
+        feedback = (
+            f"Session completed: {total} tool calls, {success_rate:.0f}% success rate"
+        )
         if failed > 0:
             feedback += f" ({failed} failures)"
         return feedback
@@ -196,12 +211,14 @@ class TranscriptParser:
             if entry_type == "user":
                 # If we have accumulated data, save the turn
                 if current_assistant_text or current_tool_calls:
-                    turns.append(Turn(
-                        user_prompt=current_user_prompt,
-                        assistant_text=current_assistant_text,
-                        tool_calls=current_tool_calls,
-                        timestamp=entry.get("timestamp")
-                    ))
+                    turns.append(
+                        Turn(
+                            user_prompt=current_user_prompt,
+                            assistant_text=current_assistant_text,
+                            tool_calls=current_tool_calls,
+                            timestamp=entry.get("timestamp"),
+                        )
+                    )
                     current_assistant_text = ""
                     current_tool_calls = []
 
@@ -215,7 +232,9 @@ class TranscriptParser:
                             # Regular user prompt
                             text = block.get("text", "")
                             # Skip system injected content
-                            if not text.startswith("<ide_") and not text.startswith("<system"):
+                            if not text.startswith("<ide_") and not text.startswith(
+                                "<system"
+                            ):
                                 current_user_prompt = text
                         elif block.get("type") == "tool_result":
                             # Tool result - match to pending tool call
@@ -225,8 +244,12 @@ class TranscriptParser:
 
                             # Store for matching
                             pending_tool_results[tool_use_id] = {
-                                "result": result_content if isinstance(result_content, str) else str(result_content)[:500],
-                                "is_error": is_error
+                                "result": (
+                                    result_content
+                                    if isinstance(result_content, str)
+                                    else str(result_content)[:500]
+                                ),
+                                "is_error": is_error,
                             }
 
                             if is_error:
@@ -247,7 +270,7 @@ class TranscriptParser:
                             tool_call = ToolCall(
                                 name=block.get("name", "unknown"),
                                 input=block.get("input", {}),
-                                tool_use_id=tool_use_id
+                                tool_use_id=tool_use_id,
                             )
 
                             # Check if we have a result for this tool
@@ -261,11 +284,13 @@ class TranscriptParser:
 
         # Don't forget the last turn
         if current_assistant_text or current_tool_calls:
-            turns.append(Turn(
-                user_prompt=current_user_prompt,
-                assistant_text=current_assistant_text,
-                tool_calls=current_tool_calls
-            ))
+            turns.append(
+                Turn(
+                    user_prompt=current_user_prompt,
+                    assistant_text=current_assistant_text,
+                    tool_calls=current_tool_calls,
+                )
+            )
 
         return ParsedTranscript(
             session_id=session_id,
@@ -273,13 +298,14 @@ class TranscriptParser:
             cwd=cwd,
             total_tool_calls=total_tools,
             successful_tool_calls=total_tools - failed_tools,
-            failed_tool_calls=failed_tools
+            failed_tool_calls=failed_tools,
         )
 
 
 # ============================================================================
 # Skill File Generator
 # ============================================================================
+
 
 class SkillGenerator:
     """Generate Claude Code skill files from ACE playbook."""
@@ -305,9 +331,7 @@ class SkillGenerator:
 
         # Sort bullets by effectiveness (helpful - harmful)
         sorted_bullets = sorted(
-            bullets,
-            key=lambda b: (b.helpful - b.harmful, b.helpful),
-            reverse=True
+            bullets, key=lambda b: (b.helpful - b.harmful, b.helpful), reverse=True
         )
 
         # Group by section
@@ -411,6 +435,7 @@ No strategies learned yet. Strategies will appear here as you use Claude Code.
 # Main Hook Learner
 # ============================================================================
 
+
 class ACEHookLearner:
     """
     Main class for learning from Claude Code sessions via hooks.
@@ -450,10 +475,46 @@ class ACEHookLearner:
             self.playbook = Playbook()
             logger.info("Created new playbook")
 
-        # Create ACE components
+        # Create ACE components with v2.1 prompts for better effectiveness
         self.ace_llm = ace_llm or LiteLLMClient(model=ace_model, max_tokens=2048)
-        self.reflector = Reflector(self.ace_llm)
-        self.curator = Curator(self.ace_llm)
+        prompt_mgr = PromptManager()
+        self.reflector = Reflector(
+            self.ace_llm, prompt_template=prompt_mgr.get_reflector_prompt()
+        )
+        self.curator = Curator(
+            self.ace_llm, prompt_template=prompt_mgr.get_curator_prompt()
+        )
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    def _run_reflector_with_retry(
+        self, task: str, generator_output: GeneratorOutput, feedback: str
+    ):
+        """Run Reflector with retry on transient failures."""
+        return self.reflector.reflect(
+            question=task,
+            generator_output=generator_output,
+            playbook=self.playbook,
+            ground_truth=None,
+            feedback=feedback,
+        )
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    def _run_curator_with_retry(self, reflection, cwd: str, progress: str):
+        """Run Curator with retry on transient failures."""
+        return self.curator.curate(
+            reflection=reflection,
+            playbook=self.playbook,
+            question_context=f"Claude Code session in {cwd}",
+            progress=progress,
+        )
 
     def learn_from_hook(self) -> bool:
         """
@@ -503,9 +564,13 @@ class ACEHookLearner:
             transcript = self.transcript_parser.parse(transcript_path)
             logger.info(f"Parsed transcript: {transcript.total_tool_calls} tool calls")
 
-            # Skip if no meaningful activity
-            if transcript.total_tool_calls == 0:
-                logger.info("No tool calls in transcript, skipping learning")
+            # Skip trivial sessions (less than 3 tool calls)
+            MIN_TOOL_CALLS = 3
+            if transcript.total_tool_calls < MIN_TOOL_CALLS:
+                logger.info(
+                    f"Skipping trivial session ({transcript.total_tool_calls} tool calls, "
+                    f"minimum {MIN_TOOL_CALLS})"
+                )
                 return True
 
             # Get last user prompt as the "task"
@@ -518,31 +583,30 @@ class ACEHookLearner:
             # Create GeneratorOutput for Reflector
             generator_output = GeneratorOutput(
                 reasoning=transcript.to_execution_trace(),
-                final_answer=transcript.turns[-1].assistant_text if transcript.turns else "",
+                final_answer=(
+                    transcript.turns[-1].assistant_text if transcript.turns else ""
+                ),
                 bullet_ids=[],
                 raw={
                     "total_tools": transcript.total_tool_calls,
                     "failed_tools": transcript.failed_tool_calls,
-                }
+                },
             )
 
-            # Run Reflector
+            # Run Reflector with retry
             logger.info("Running Reflector...")
-            reflection = self.reflector.reflect(
-                question=task,
+            reflection = self._run_reflector_with_retry(
+                task=task,
                 generator_output=generator_output,
-                playbook=self.playbook,
-                ground_truth=None,
-                feedback=transcript.get_feedback()
+                feedback=transcript.get_feedback(),
             )
 
-            # Run Curator
+            # Run Curator with retry
             logger.info("Running Curator...")
-            curator_output = self.curator.curate(
+            curator_output = self._run_curator_with_retry(
                 reflection=reflection,
-                playbook=self.playbook,
-                question_context=f"Claude Code session in {transcript.cwd}",
-                progress=f"{transcript.successful_tool_calls}/{transcript.total_tool_calls} successful"
+                cwd=transcript.cwd,
+                progress=f"{transcript.successful_tool_calls}/{transcript.total_tool_calls} successful",
             )
 
             # Update playbook
@@ -567,51 +631,91 @@ class ACEHookLearner:
 # CLI Entry Point
 # ============================================================================
 
-def main():
-    """CLI entry point for ace-learn hook."""
-    import argparse
 
-    parser = argparse.ArgumentParser(
-        description="ACE learning hook for Claude Code"
-    )
-    parser.add_argument(
-        "--transcript", "-t",
-        help="Path to transcript file (if not using stdin)"
-    )
-    parser.add_argument(
-        "--playbook", "-p",
-        help="Path to playbook file",
-        default=str(ACEHookLearner.DEFAULT_PLAYBOOK_PATH)
-    )
-    parser.add_argument(
-        "--skill-dir", "-s",
-        help="Directory for skill output",
-        default=str(SkillGenerator.DEFAULT_SKILL_DIR)
-    )
-    parser.add_argument(
-        "--model", "-m",
-        help="Model for ACE learning",
-        default="gpt-4o-mini"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+def setup_hook():
+    """Configure Claude Code to use ACE learning hook."""
+    settings_path = Path.home() / ".claude" / "settings.json"
 
-    args = parser.parse_args()
+    # Load existing settings or create new
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except json.JSONDecodeError:
+            settings = {}
+    else:
+        settings = {}
 
-    # Setup logging
+    # Add/update hook config (merge, don't overwrite)
+    if "hooks" not in settings:
+        settings["hooks"] = {}
+
+    settings["hooks"]["Stop"] = [
+        {"matcher": "*", "hooks": [{"type": "command", "command": "ace-learn"}]}
+    ]
+
+    # Write back
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2))
+
+    # Create .env template if it doesn't exist
+    env_path = Path.home() / ".ace" / ".env"
+    if not env_path.exists():
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.write_text(
+            "# ACE Framework Configuration\n# Add your LLM API key here\nOPENAI_API_KEY=your-key-here\n"
+        )
+
+    print("✓ Claude Code hook configured!")
+    print()
+    print("Next steps:")
+    print(f"  1. Add your API key to: {env_path}")
+    print("  2. Start using Claude Code - it will learn from your sessions!")
+    print()
+    print(f"Settings saved to: {settings_path}")
+
+
+def run_learning(args):
+    """Run the learning process (called from hook or manually)."""
+    # Fork to background unless --sync is specified
+    # This allows Claude Code to exit immediately without waiting for learning
+    if not args.sync and not args.transcript:
+        # Read stdin before forking (stdin won't be available in child)
+        try:
+            stdin_data = sys.stdin.read()
+        except Exception:
+            stdin_data = ""
+
+        # Fork to background
+        pid = os.fork()
+        if pid > 0:
+            # Parent exits immediately - Claude Code continues
+            sys.exit(0)
+
+        # Child continues with learning in background
+        # Detach from terminal
+        os.setsid()
+
+        # Redirect stdin to the data we captured
+        sys.stdin = __import__("io").StringIO(stdin_data)
+
+    # Setup logging (to file in background mode)
+    log_file = None
+    if not args.sync and not args.transcript:
+        log_dir = Path.home() / ".ace" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"ace-learn-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s"
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        filename=str(log_file) if log_file else None,
     )
 
     # Create learner
     learner = ACEHookLearner(
         playbook_path=Path(args.playbook),
         skill_dir=Path(args.skill_dir),
-        ace_model=args.model
+        ace_model=args.model,
     )
 
     # Learn from transcript or hook input
@@ -621,6 +725,63 @@ def main():
         success = learner.learn_from_hook()
 
     sys.exit(0 if success else 1)
+
+
+def main():
+    """CLI entry point for ace-learn."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="ACE learning for Claude Code",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  ace-learn setup              Configure Claude Code hook (run once)
+  ace-learn                    Learn from stdin (called by hook)
+  ace-learn -t transcript.jsonl   Learn from specific transcript
+""",
+    )
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Setup command
+    subparsers.add_parser("setup", help="Configure Claude Code to use ACE learning")
+
+    # Learning options (work without subcommand for backwards compat)
+    parser.add_argument(
+        "--transcript", "-t", help="Path to transcript file (if not using stdin)"
+    )
+    parser.add_argument(
+        "--playbook",
+        "-p",
+        help="Path to playbook file",
+        default=str(ACEHookLearner.DEFAULT_PLAYBOOK_PATH),
+    )
+    parser.add_argument(
+        "--skill-dir",
+        "-s",
+        help="Directory for skill output",
+        default=str(SkillGenerator.DEFAULT_SKILL_DIR),
+    )
+    parser.add_argument(
+        "--model", "-m", help="Model for ACE learning", default="gpt-4o-mini"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
+    )
+    parser.add_argument(
+        "--sync",
+        action="store_true",
+        help="Run synchronously (default: fork to background)",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "setup":
+        setup_hook()
+    else:
+        # Default: run learning (backwards compat with hook calling ace-learn)
+        run_learning(args)
 
 
 if __name__ == "__main__":
