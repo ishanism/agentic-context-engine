@@ -56,9 +56,14 @@ print(answer)  # "ACE allows AI agents to remember and learn from experience!"
 
 ACE provides four ready-to-use integrations:
 
+**[→ Integration Guide](docs/INTEGRATION_GUIDE.md)** | **[→ Examples](examples/)**
+
 ### **ACELiteLLM** - Simplest Start 🚀
 
 Create your self-improving agent:
+
+<details>
+<summary>Click to view code example</summary>
 
 ```python
 from ace import ACELiteLLM
@@ -81,9 +86,14 @@ agent.save_skillbook("my_agent.json")
 agent2 = ACELiteLLM.from_skillbook("my_agent.json", model="gpt-4o-mini")
 ```
 
+</details>
+
 ### **ACELangChain** - Wrap ACE Around Your Existing Agent ⛓️
 
 Wrap any LangChain chain/agent with learning:
+
+<details>
+<summary>Click to view code example</summary>
 
 ```python
 from ace import ACELangChain
@@ -92,11 +102,17 @@ ace_chain = ACELangChain(runnable=your_langchain_chain)
 result = ace_chain.invoke({"question": "Your task"})  # Learns automatically
 ```
 
+</details>
+<br>
+
 **Best for:** Multi-step workflows, tool-using agents
 
 ### **ACEAgent** - Enhance Browser-Use Agent with Self-Optimizing 🌐
 
 Self-improving browser agents with [browser-use](https://github.com/browser-use/browser-use):
+
+<details>
+<summary>Click to view code example</summary>
 
 ```bash
 pip install ace-framework[browser-use]
@@ -120,12 +136,18 @@ agent = ACEAgent(llm=ChatBrowserUse(), skillbook_path="hn_expert.json")
 await agent.run(task="New task")  # Starts smart!
 ```
 
+</details>
+<br>
+
 **Features:** Drop-in replacement for `browser_use.Agent`, automatic learning, reusable skillbooks
 **[→ Browser Use Guide](examples/browser-use/README.md)**
 
 ### **ACEClaudeCode** - Claude Code CLI 💻
 
 Self-improving coding agent using [Claude Code](https://claude.ai/code):
+
+<details>
+<summary>Click to view code example</summary>
 
 ```python
 from ace import ACEClaudeCode
@@ -143,10 +165,11 @@ agent.save_skillbook("coding_expert.json")
 agent = ACEClaudeCode(working_dir="./project", skillbook_path="coding_expert.json")
 ```
 
+</details>
+<br>
+
 **Features:** Claude Code CLI wrapper, automatic learning, task execution traces
 **[→ Claude Code Loop Example](examples/claude-code-loop/)**
-
-**[→ Integration Guide](docs/INTEGRATION_GUIDE.md)** | **[→ Examples](examples/)**
 
 ---
 
