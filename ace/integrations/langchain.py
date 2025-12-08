@@ -2,11 +2,18 @@
 ACE + LangChain integration for learning from chain/agent execution.
 
 This module provides ACELangChain, a wrapper that adds ACE learning capabilities
-to any LangChain Runnable (chains, agents, custom runnables).
+to any LangChain Runnable (chains, agents, LangGraph graphs, custom runnables).
+
+Supported Runnable Types:
+- Simple chains: prompt | llm patterns
+- AgentExecutor: Tool-calling agents with intermediate step tracing
+- LangGraph CompiledStateGraph: Modern LangGraph agents (create_react_agent, etc.)
+- Custom runnables: Any LangChain Runnable
 
 When to Use ACELangChain:
 - Complex workflows: Multi-step LangChain chains
 - Tool-using agents: LangChain agents with tools
+- LangGraph agents: create_react_agent, create_tool_calling_agent, StateGraph
 - Custom runnables: Your own LangChain components
 - Production workflows: LangChain orchestration with learning
 
@@ -15,7 +22,7 @@ When NOT to Use ACELangChain:
 - Browser automation → Use ACEAgent (browser-use)
 - Custom agent (non-LangChain) → Use integration pattern (see docs)
 
-Example:
+Example (LangChain chain):
     from langchain.chains import LLMChain
     from langchain.prompts import PromptTemplate
     from langchain_openai import ChatOpenAI
@@ -34,6 +41,26 @@ Example:
 
     # Save learned strategies
     ace_chain.save_skillbook("chain_expert.json")
+
+Example (LangGraph agent):
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage
+    from langgraph.prebuilt import create_react_agent
+    from ace.integrations import ACELangChain
+
+    # Create LangGraph agent
+    llm = ChatOpenAI(model="gpt-4")
+    tools = [...]
+    graph = create_react_agent(llm, tools)
+
+    # Wrap with ACE learning
+    ace_agent = ACELangChain(runnable=graph)
+
+    # Use with message format (LangGraph I/O)
+    result = ace_agent.invoke({"messages": [HumanMessage(content="What is 2+2?")]})
+    # Returns: "4" (extracted from AIMessage)
+
+    # ACE automatically extracts traces from message history for learning
 """
 
 from typing import TYPE_CHECKING, Any, Optional, Dict, Callable, List
@@ -64,6 +91,15 @@ try:
 except ImportError:
     AGENT_EXECUTOR_AVAILABLE = False
     AgentExecutor = None  # type: ignore
+
+# Try to import LangGraph CompiledStateGraph for LangGraph agent support
+try:
+    from langgraph.graph.state import CompiledStateGraph
+
+    LANGGRAPH_AVAILABLE = True
+except ImportError:
+    LANGGRAPH_AVAILABLE = False
+    CompiledStateGraph = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +255,9 @@ class ACELangChain:
         For AgentExecutor runnables, automatically enables intermediate step
         extraction to provide richer reasoning traces to the Reflector.
 
+        For LangGraph CompiledStateGraph runnables, automatically handles
+        message-based I/O format.
+
         Args:
             input: Input for the runnable (string, dict, etc.)
             **kwargs: Additional arguments passed to runnable.invoke()
@@ -232,12 +271,16 @@ class ACELangChain:
 
             # Dict input
             result = ace_chain.invoke({"question": "What is ACE?"})
+
+            # LangGraph message format
+            result = ace_chain.invoke({"messages": [HumanMessage(content="What is ACE?")]})
         """
         # Step 1: Inject skillbook context
         enhanced_input = self._inject_context(input)
 
-        # Step 2: Configure AgentExecutor for intermediate steps (if applicable)
+        # Step 2: Detect runnable type and configure
         is_agent = self._is_agent_executor()
+        is_langgraph = self._is_langgraph()
         original_setting = False
         if is_agent:
             original_setting = getattr(
@@ -267,6 +310,9 @@ class ACELangChain:
             if is_agent and isinstance(result, dict) and "intermediate_steps" in result:
                 # Rich trace from AgentExecutor
                 self._learn_with_trace(input, result)
+            elif is_langgraph and isinstance(result, dict) and "messages" in result:
+                # Rich trace from LangGraph message history
+                self._learn_with_langgraph_trace(input, result)
             else:
                 # Basic learning
                 self._learn(input, result)
@@ -274,6 +320,8 @@ class ACELangChain:
         # Step 5: Return clean output
         if is_agent and isinstance(result, dict) and "output" in result:
             return result["output"]
+        if is_langgraph and isinstance(result, dict) and "messages" in result:
+            return self._extract_langgraph_output(result)
         return result
 
     async def ainvoke(self, input: Any, **kwargs) -> Any:
@@ -282,6 +330,9 @@ class ACELangChain:
 
         For AgentExecutor runnables, automatically enables intermediate step
         extraction to provide richer reasoning traces to the Reflector.
+
+        For LangGraph CompiledStateGraph runnables, automatically handles
+        message-based I/O format.
 
         Args:
             input: Input for the runnable (string, dict, etc.)
@@ -298,12 +349,16 @@ class ACELangChain:
             result = await ace_chain.ainvoke({"input": "Question"})
             # Result returns immediately
             await ace_chain.wait_for_learning()  # Wait for learning to complete
+
+            # LangGraph message format
+            result = await ace_chain.ainvoke({"messages": [HumanMessage(content="Question")]})
         """
         # Step 1: Inject skillbook context
         enhanced_input = self._inject_context(input)
 
-        # Step 2: Configure AgentExecutor for intermediate steps (if applicable)
+        # Step 2: Detect runnable type and configure
         is_agent = self._is_agent_executor()
+        is_langgraph = self._is_langgraph()
         original_setting = False
         if is_agent:
             original_setting = getattr(
@@ -337,27 +392,38 @@ class ACELangChain:
         # Step 4: Learn from result
         if self.is_learning:
             # Determine which learning method to use
-            use_trace = (
+            use_agent_trace = (
                 is_agent and isinstance(result, dict) and "intermediate_steps" in result
+            )
+            use_langgraph_trace = (
+                is_langgraph and isinstance(result, dict) and "messages" in result
             )
 
             if self._async_learning:
-                if use_trace:
+                if use_agent_trace:
                     task = asyncio.create_task(self._alearn_with_trace(input, result))
+                elif use_langgraph_trace:
+                    task = asyncio.create_task(
+                        self._alearn_with_langgraph_trace(input, result)
+                    )
                 else:
                     task = asyncio.create_task(self._alearn(input, result))
                 task.add_done_callback(self._on_task_done)
                 self._learning_tasks.append(task)
                 self._tasks_submitted_count += 1
             else:
-                if use_trace:
+                if use_agent_trace:
                     await self._alearn_with_trace(input, result)
+                elif use_langgraph_trace:
+                    await self._alearn_with_langgraph_trace(input, result)
                 else:
                     await self._alearn(input, result)
 
         # Step 5: Return clean output
         if is_agent and isinstance(result, dict) and "output" in result:
             return result["output"]
+        if is_langgraph and isinstance(result, dict) and "messages" in result:
+            return self._extract_langgraph_output(result)
         return result
 
     def _inject_context(self, input: Any) -> Any:
@@ -366,7 +432,8 @@ class ACELangChain:
 
         Handles common input formats:
         - String: Append skillbook context
-        - Dict with "input" key: Enhance input field
+        - Dict with "messages" key: Enhance first HumanMessage (LangGraph format)
+        - Dict with "input" key: Enhance input field (AgentExecutor format)
         - Dict without: Add skillbook_context key
         - Other: Return unchanged (no skillbook strategies yet)
 
@@ -385,6 +452,22 @@ class ACELangChain:
         # String input - append context
         if isinstance(input, str):
             return f"{input}\n\n{skillbook_context}"
+
+        # LangGraph message format - enhance first HumanMessage
+        if isinstance(input, dict) and "messages" in input:
+            messages = input["messages"]
+            if messages and hasattr(messages[0], "content"):
+                enhanced_messages = list(messages)
+                first_msg = enhanced_messages[0]
+                enhanced_content = f"{skillbook_context}\n\n{first_msg.content}"
+                # Create new message of the same type with enhanced content
+                enhanced_messages[0] = type(first_msg)(content=enhanced_content)
+                # Preserve other keys in the input dict
+                return {
+                    "messages": enhanced_messages,
+                    **{k: v for k, v in input.items() if k != "messages"},
+                }
+            return input
 
         # Dict input with "input" key - enhance that field
         if isinstance(input, dict) and "input" in input:
@@ -606,6 +689,63 @@ Note: This is an external LangChain chain execution that failed. Learning should
             logger.error(f"ACE learning with trace failed: {e}")
             # Don't crash - continue without learning
 
+    def _learn_with_langgraph_trace(self, original_input: Any, result: Dict[str, Any]):
+        """
+        Learn from LangGraph execution with message history.
+
+        Extracts reasoning trace from LangGraph's message-based output format
+        and passes it to the Reflector for analysis.
+
+        Args:
+            original_input: Original input to runnable
+            result: LangGraph result dict with 'messages' key
+        """
+        try:
+            task = self._get_task_str(original_input)
+            output = self._extract_langgraph_output(result)
+            trace, steps = self._extract_langgraph_trace(result)
+
+            num_messages = len(result.get("messages", []))
+
+            reasoning = f"""Question/Task: {task}
+
+=== LANGGRAPH EXECUTION TRACE ({num_messages} messages) ===
+{trace}
+=== END TRACE ===
+
+Final Answer: {output}"""
+
+            agent_output = AgentOutput(
+                reasoning=reasoning,
+                final_answer=output,
+                skill_ids=[],
+                raw={"input": original_input, "output": result},
+            )
+
+            feedback = f"LangGraph agent completed in {num_messages} messages"
+
+            # Reflect and SkillManager
+            reflection = self.reflector.reflect(
+                question=task,
+                agent_output=agent_output,
+                skillbook=self.skillbook,
+                ground_truth=None,
+                feedback=feedback,
+            )
+
+            skill_manager_output = self.skill_manager.update_skills(
+                reflection=reflection,
+                skillbook=self.skillbook,
+                question_context=f"task: {task}",
+                progress=task,
+            )
+
+            self.skillbook.apply_update(skill_manager_output.update)
+
+        except Exception as e:
+            logger.error(f"ACE LangGraph learning failed: {e}")
+            # Don't crash - continue without learning
+
     async def _alearn(self, original_input: Any, result: Any):
         """
         Async version of _learn for background execution.
@@ -632,6 +772,19 @@ Note: This is an external LangChain chain execution that failed. Learning should
         preventing event loop blocking when async_learning=True.
         """
         await asyncio.to_thread(self._learn_with_trace, original_input, result)
+
+    async def _alearn_with_langgraph_trace(
+        self, original_input: Any, result: Dict[str, Any]
+    ):
+        """
+        Async version of _learn_with_langgraph_trace for background execution.
+
+        Uses asyncio.to_thread() to run sync learning in a thread pool,
+        preventing event loop blocking when async_learning=True.
+        """
+        await asyncio.to_thread(
+            self._learn_with_langgraph_trace, original_input, result
+        )
 
     def _on_task_done(self, task: asyncio.Task) -> None:
         """Callback when a learning task completes (success or failure)."""
@@ -755,11 +908,102 @@ Note: This is an external LangChain chain execution that failed. Learning should
             return False
         return isinstance(self.runnable, AgentExecutor)
 
+    def _is_langgraph(self) -> bool:
+        """
+        Check if the wrapped runnable is a LangGraph CompiledStateGraph.
+
+        LangGraph agents (from create_react_agent, create_tool_calling_agent,
+        or custom StateGraph().compile()) use message-based I/O format:
+        - Input: {"messages": [HumanMessage(...)]}
+        - Output: {"messages": [HumanMessage, AIMessage, ToolMessage, ...]}
+        """
+        if not LANGGRAPH_AVAILABLE or CompiledStateGraph is None:
+            return False
+        return isinstance(self.runnable, CompiledStateGraph)
+
+    def _extract_langgraph_output(self, result: Dict[str, Any]) -> str:
+        """
+        Extract final answer from LangGraph message-based output.
+
+        Finds the last AIMessage with content (skipping tool messages).
+
+        Args:
+            result: LangGraph result dict with "messages" key
+
+        Returns:
+            Final answer string, or empty string if not found
+        """
+        messages = result.get("messages", [])
+        # Find last AIMessage with content (not a tool message)
+        for msg in reversed(messages):
+            if hasattr(msg, "content") and msg.content:
+                # Skip tool messages
+                msg_type = getattr(msg, "type", msg.__class__.__name__.lower())
+                if msg_type != "tool":
+                    return str(msg.content)
+        return ""
+
+    def _extract_langgraph_trace(
+        self, result: Dict[str, Any]
+    ) -> tuple[str, List[tuple[Any, Any]]]:
+        """
+        Extract reasoning trace and intermediate steps from LangGraph output.
+
+        Parses the message history to build a reasoning trace for the Reflector
+        and extracts tool calls/observations as intermediate_steps.
+
+        Args:
+            result: LangGraph result dict with "messages" key
+
+        Returns:
+            Tuple of (trace_string, intermediate_steps_list)
+        """
+        messages = result.get("messages", [])
+        parts = []
+        intermediate_steps: List[tuple[Any, Any]] = []
+
+        for msg in messages:
+            msg_type = getattr(msg, "type", msg.__class__.__name__.lower())
+            content = getattr(msg, "content", str(msg))
+
+            if msg_type == "human":
+                parts.append(f"Human: {str(content)[:300]}")
+            elif msg_type == "ai":
+                if content:
+                    parts.append(f"Assistant: {str(content)[:300]}")
+                # Extract tool calls if present
+                tool_calls = getattr(msg, "tool_calls", [])
+                for tc in tool_calls:
+                    tool_name = (
+                        tc.get("name", "unknown")
+                        if isinstance(tc, dict)
+                        else getattr(tc, "name", "unknown")
+                    )
+                    parts.append(f"  Tool Call: {tool_name}")
+                    # Add to intermediate_steps with None observation (filled later)
+                    intermediate_steps.append((tc, None))
+            elif msg_type == "tool":
+                parts.append(f"Tool Result: {str(content)[:300]}")
+                # Match with last tool call that has no observation
+                for i in range(len(intermediate_steps) - 1, -1, -1):
+                    if intermediate_steps[i][1] is None:
+                        tc = intermediate_steps[i][0]
+                        intermediate_steps[i] = (tc, content)
+                        break
+
+        return "\n".join(parts), intermediate_steps
+
     def _get_task_str(self, original_input: Any) -> str:
         """Extract task string from input."""
         if isinstance(original_input, str):
             return original_input
         elif isinstance(original_input, dict):
+            # Handle LangGraph message format
+            if "messages" in original_input:
+                messages = original_input["messages"]
+                if messages and hasattr(messages[0], "content"):
+                    return str(messages[0].content)
+            # Handle standard dict formats
             return (
                 original_input.get("input")
                 or original_input.get("question")
@@ -826,4 +1070,4 @@ Note: This is an external LangChain chain execution that failed. Learning should
         )
 
 
-__all__ = ["ACELangChain", "LANGCHAIN_AVAILABLE"]
+__all__ = ["ACELangChain", "LANGCHAIN_AVAILABLE", "LANGGRAPH_AVAILABLE"]

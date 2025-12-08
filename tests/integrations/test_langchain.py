@@ -409,3 +409,237 @@ class TestBackwardsCompatibility:
         from ace import LANGCHAIN_AVAILABLE as flag
 
         assert flag is True
+
+
+class TestLangGraphSupport:
+    """Test LangGraph CompiledStateGraph support."""
+
+    def test_langgraph_available_flag_import(self):
+        """Should be able to import LANGGRAPH_AVAILABLE flag."""
+        from ace.integrations.langchain import LANGGRAPH_AVAILABLE
+
+        # Flag should be bool (True if langgraph installed, False otherwise)
+        assert isinstance(LANGGRAPH_AVAILABLE, bool)
+
+    def test_is_langgraph_returns_false_for_mock_runnable(self):
+        """Should return False for non-LangGraph runnables."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        assert agent._is_langgraph() is False
+
+    def test_is_langgraph_returns_false_for_agent_executor(self):
+        """Should return False for AgentExecutor."""
+        # Mock AgentExecutor
+        mock_agent_executor = Mock()
+        mock_agent_executor.__class__.__name__ = "AgentExecutor"
+
+        agent = ACELangChain(runnable=mock_agent_executor)
+
+        # _is_langgraph should return False for AgentExecutor
+        assert agent._is_langgraph() is False
+
+    def test_extract_langgraph_output_extracts_last_ai_message(self):
+        """Should extract content from last AI message."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Create mock messages
+        human_msg = Mock()
+        human_msg.type = "human"
+        human_msg.content = "What is 2+2?"
+
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The answer is 4."
+
+        result = {"messages": [human_msg, ai_msg]}
+
+        output = agent._extract_langgraph_output(result)
+        assert output == "The answer is 4."
+
+    def test_extract_langgraph_output_skips_tool_messages(self):
+        """Should skip tool messages and return AI message."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Create mock messages
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The answer is 4."
+
+        tool_msg = Mock()
+        tool_msg.type = "tool"
+        tool_msg.content = "Tool result"
+
+        result = {"messages": [ai_msg, tool_msg]}
+
+        output = agent._extract_langgraph_output(result)
+        assert output == "The answer is 4."
+
+    def test_extract_langgraph_output_returns_empty_when_no_ai_message(self):
+        """Should return empty string if no AI message found."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        result = {"messages": []}
+
+        output = agent._extract_langgraph_output(result)
+        assert output == ""
+
+    def test_extract_langgraph_trace_builds_trace_string(self):
+        """Should build trace string from message history."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Create mock messages
+        human_msg = Mock()
+        human_msg.type = "human"
+        human_msg.content = "What is 2+2?"
+        human_msg.tool_calls = []
+
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The answer is 4."
+        ai_msg.tool_calls = []
+
+        result = {"messages": [human_msg, ai_msg]}
+
+        trace, steps = agent._extract_langgraph_trace(result)
+
+        assert "Human:" in trace
+        assert "What is 2+2?" in trace
+        assert "Assistant:" in trace
+        assert "The answer is 4." in trace
+        assert len(steps) == 0  # No tool calls
+
+    def test_extract_langgraph_trace_extracts_tool_calls(self):
+        """Should extract tool calls into intermediate_steps."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Create mock messages with tool call
+        human_msg = Mock()
+        human_msg.type = "human"
+        human_msg.content = "Calculate 2+2"
+        human_msg.tool_calls = []
+
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = ""
+        ai_msg.tool_calls = [{"name": "calculator", "args": {"expression": "2+2"}}]
+
+        tool_msg = Mock()
+        tool_msg.type = "tool"
+        tool_msg.content = "4"
+        tool_msg.tool_calls = []
+
+        result = {"messages": [human_msg, ai_msg, tool_msg]}
+
+        trace, steps = agent._extract_langgraph_trace(result)
+
+        assert "Tool Call: calculator" in trace
+        assert "Tool Result: 4" in trace
+        assert len(steps) == 1
+        assert steps[0][0]["name"] == "calculator"
+        assert steps[0][1] == "4"
+
+    def test_get_task_str_handles_message_format(self):
+        """Should extract task from LangGraph message format."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Create mock HumanMessage
+        human_msg = Mock()
+        human_msg.content = "What is the capital of France?"
+
+        input_data = {"messages": [human_msg]}
+
+        task = agent._get_task_str(input_data)
+        assert task == "What is the capital of France?"
+
+    def test_inject_context_handles_message_format(self):
+        """Should inject skillbook context into message format."""
+        mock_runnable = Mock()
+        agent = ACELangChain(runnable=mock_runnable)
+
+        # Add a skill to the skillbook
+        agent.skillbook.add_skill("general", "Test strategy")
+
+        # Create mock HumanMessage with proper constructor behavior
+        class MockHumanMessage:
+            def __init__(self, content):
+                self.content = content
+                self.type = "human"
+
+        human_msg = MockHumanMessage(content="Original question")
+        input_data = {"messages": [human_msg]}
+
+        result = agent._inject_context(input_data)
+
+        assert "messages" in result
+        assert "Test strategy" in result["messages"][0].content
+        assert "Original question" in result["messages"][0].content
+
+    def test_invoke_with_langgraph_result_extracts_output(self):
+        """Should extract output from LangGraph message format in invoke."""
+        mock_runnable = Mock()
+
+        # Create mock messages for result
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The final answer"
+
+        mock_runnable.invoke.return_value = {"messages": [ai_msg]}
+
+        agent = ACELangChain(runnable=mock_runnable, is_learning=False)
+
+        # Patch _is_langgraph to return True
+        with patch.object(agent, "_is_langgraph", return_value=True):
+            result = agent.invoke("test input")
+
+        assert result == "The final answer"
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_with_langgraph_result_extracts_output(self):
+        """Should extract output from LangGraph message format in ainvoke."""
+        mock_runnable = Mock()
+
+        # Create mock messages for result
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The final answer"
+
+        mock_runnable.ainvoke = AsyncMock(return_value={"messages": [ai_msg]})
+
+        agent = ACELangChain(runnable=mock_runnable, is_learning=False)
+
+        # Patch _is_langgraph to return True
+        with patch.object(agent, "_is_langgraph", return_value=True):
+            result = await agent.ainvoke("test input")
+
+        assert result == "The final answer"
+
+    def test_invoke_with_langgraph_calls_learning_method(self):
+        """Should call _learn_with_langgraph_trace for LangGraph results."""
+        mock_runnable = Mock()
+
+        # Create mock messages for result
+        ai_msg = Mock()
+        ai_msg.type = "ai"
+        ai_msg.content = "The answer"
+
+        mock_runnable.invoke.return_value = {"messages": [ai_msg]}
+
+        agent = ACELangChain(runnable=mock_runnable, is_learning=True)
+
+        # Patch _is_langgraph to return True and learning method
+        with patch.object(agent, "_is_langgraph", return_value=True):
+            with patch.object(agent, "_learn_with_langgraph_trace") as mock_learn:
+                agent.invoke("test")
+
+                mock_learn.assert_called_once()
+                # Verify it was called with correct args
+                call_args = mock_learn.call_args[0]
+                assert call_args[0] == "test"
+                assert "messages" in call_args[1]

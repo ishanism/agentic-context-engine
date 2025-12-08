@@ -60,6 +60,7 @@ langchain = [
     "langchain-openai>=0.3.35",
     "langchain-anthropic>=0.3.0",
     "langchain-litellm>=0.2.0",
+    "langgraph>=0.2.0",
 ]
 transformers = [
     "transformers>=4.30.0",
@@ -72,6 +73,7 @@ all = [
     "langchain-openai>=0.3.35",
     "langchain-anthropic>=0.3.0",
     "langchain-litellm>=0.2.0",
+    "langgraph>=0.2.0",
     "transformers>=4.30.0",
     "torch>=2.0.0",
     "accelerate>=0.20.0",
