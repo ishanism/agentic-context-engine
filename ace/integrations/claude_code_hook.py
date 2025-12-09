@@ -308,63 +308,39 @@ class TranscriptParser:
 
 
 class SkillGenerator:
-    """Generate Claude Code skill files from ACE playbook."""
+    """Generate Claude Code skill files from ACE playbook with progressive disclosure."""
 
     DEFAULT_SKILL_DIR = Path.home() / ".claude" / "skills" / "ace-learnings"
+    MIN_BULLETS_FOR_CATEGORY = 3  # Only split sections with 3+ bullets
 
     def __init__(self, skill_dir: Optional[Path] = None):
         self.skill_dir = skill_dir or self.DEFAULT_SKILL_DIR
 
-    def generate(self, playbook: Playbook) -> str:
-        """
-        Generate SKILL.md content from playbook.
-
-        Args:
-            playbook: ACE Playbook with learned strategies
-
-        Returns:
-            Markdown content for SKILL.md
-        """
-        bullets = playbook.bullets()
-        if not bullets:
-            return self._empty_skill()
-
-        # Sort bullets by effectiveness (helpful - harmful)
-        sorted_bullets = sorted(
-            bullets, key=lambda b: (b.helpful - b.harmful, b.helpful), reverse=True
-        )
-
-        # Group by section
+    def _group_by_section(self, bullets: List[Bullet]) -> Dict[str, List[Bullet]]:
+        """Group bullets by section, sorted by effectiveness within each."""
         sections: Dict[str, List[Bullet]] = {}
-        for bullet in sorted_bullets:
+        for bullet in bullets:
             sections.setdefault(bullet.section, []).append(bullet)
+        # Sort each section by effectiveness
+        for section in sections:
+            sections[section] = sorted(
+                sections[section],
+                key=lambda b: (b.helpful - b.harmful, b.helpful),
+                reverse=True,
+            )
+        return sections
 
-        # Build skill content
-        parts = [self._frontmatter()]
-        parts.append(self._intro())
-
-        # Top strategies (cross-section, top 10 by effectiveness)
-        top_bullets = sorted_bullets[:10]
-        if top_bullets:
-            parts.append(self._top_strategies(top_bullets))
-
-        # Section-specific strategies
-        for section, section_bullets in sorted(sections.items()):
-            parts.append(self._section(section, section_bullets[:10]))
-
-        # Antipatterns (high harmful count)
-        antipatterns = [b for b in bullets if b.harmful > b.helpful]
-        if antipatterns:
-            parts.append(self._antipatterns(antipatterns[:5]))
-
-        parts.append(self._footer())
-
-        return "\n\n".join(parts)
-
-    def _frontmatter(self) -> str:
-        return """---
+    def _frontmatter(self, sections: List[str]) -> str:
+        """Generate dynamic frontmatter based on actual sections."""
+        if sections:
+            # Take up to 6 sections for the description
+            keywords = ", ".join(s.replace("_", " ") for s in sorted(sections)[:6])
+            desc = f"Learned coding strategies covering {keywords}. Use when writing code, debugging, testing, or implementing features."
+        else:
+            desc = "Learned coding strategies from past sessions. Use when writing code, debugging, testing, or implementing features."
+        return f"""---
 name: ace-learnings
-description: Learned coding strategies from past sessions. Apply when writing code, debugging, testing, navigating codebases, or making architectural decisions. Contains proven patterns and common pitfalls to avoid.
+description: {desc}
 ---"""
 
     def _intro(self) -> str:
@@ -374,7 +350,7 @@ These strategies have been automatically learned from coding sessions.
 Apply relevant strategies based on the current task."""
 
     def _empty_skill(self) -> str:
-        return f"""{self._frontmatter()}
+        return f"""{self._frontmatter([])}
 
 # ACE Learned Strategies
 
@@ -389,13 +365,28 @@ No strategies learned yet. Strategies will appear here as you use Claude Code.
             lines.append(f"{i}. {b.content} {score}")
         return "\n".join(lines)
 
-    def _section(self, section: str, bullets: List[Bullet]) -> str:
-        # Convert section name to title case
+    def _section_inline(self, section: str, bullets: List[Bullet]) -> str:
+        """Render a section inline (for small sections in main SKILL.md)."""
         title = section.replace("_", " ").title()
         lines = [f"## {title}"]
         for b in bullets:
             score = f"({b.helpful}↑ {b.harmful}↓)"
             lines.append(f"- {b.content} {score}")
+        return "\n".join(lines)
+
+    def _category_index(self, large_sections: Dict[str, List[Bullet]]) -> str:
+        """Generate index of category files for progressive disclosure."""
+        if not large_sections:
+            return ""
+        lines = ["## Categories"]
+        lines.append("For detailed strategies, read the relevant category file:")
+        for section in sorted(large_sections.keys()):
+            bullets = large_sections[section]
+            title = section.replace("_", " ").title()
+            filename = section.replace("_", "-") + ".md"
+            lines.append(
+                f"- **{title}**: `categories/{filename}` ({len(bullets)} strategies)"
+            )
         return "\n".join(lines)
 
     def _antipatterns(self, bullets: List[Bullet]) -> str:
@@ -410,9 +401,57 @@ No strategies learned yet. Strategies will appear here as you use Claude Code.
         return f"""---
 *Auto-generated by ACE at {timestamp}*"""
 
+    def generate_main(
+        self,
+        sorted_bullets: List[Bullet],
+        large_sections: Dict[str, List[Bullet]],
+        small_sections: Dict[str, List[Bullet]],
+    ) -> str:
+        """Generate main SKILL.md with top strategies and category index."""
+        all_sections = list(large_sections.keys()) + list(small_sections.keys())
+        parts = [self._frontmatter(all_sections)]
+        parts.append(self._intro())
+
+        # Top 10 strategies (always shown)
+        top_bullets = sorted_bullets[:10]
+        if top_bullets:
+            parts.append(self._top_strategies(top_bullets))
+
+        # Category index for large sections (progressive disclosure)
+        if large_sections:
+            parts.append(self._category_index(large_sections))
+
+        # Small sections inline (not worth splitting)
+        for section in sorted(small_sections.keys()):
+            parts.append(self._section_inline(section, small_sections[section]))
+
+        # Antipatterns
+        antipatterns = [b for b in sorted_bullets if b.harmful > b.helpful]
+        if antipatterns:
+            parts.append(self._antipatterns(antipatterns[:5]))
+
+        parts.append(self._footer())
+        return "\n\n".join(parts)
+
+    def generate_category(self, section: str, bullets: List[Bullet]) -> str:
+        """Generate a category file for a specific section."""
+        title = section.replace("_", " ").title()
+        lines = [f"# {title} Strategies"]
+        lines.append("")
+        for b in bullets:
+            score = f"({b.helpful}↑ {b.harmful}↓)"
+            lines.append(f"- {b.content} {score}")
+        lines.append("")
+        lines.append(self._footer())
+        return "\n".join(lines)
+
     def save(self, playbook: Playbook) -> Path:
         """
-        Save skill file to disk.
+        Save skill files with progressive disclosure.
+
+        Creates:
+        - SKILL.md: Top 10 + category index + small sections
+        - categories/*.md: Detailed strategies for large sections
 
         Args:
             playbook: ACE Playbook to generate skill from
@@ -422,13 +461,64 @@ No strategies learned yet. Strategies will appear here as you use Claude Code.
         """
         self.skill_dir.mkdir(parents=True, exist_ok=True)
 
-        content = self.generate(playbook)
-        skill_path = self.skill_dir / "SKILL.md"
+        bullets = playbook.bullets()
+        if not bullets:
+            content = self._empty_skill()
+            skill_path = self.skill_dir / "SKILL.md"
+            skill_path.write_text(content, encoding="utf-8")
+            return skill_path
 
-        skill_path.write_text(content, encoding="utf-8")
+        # Sort all bullets by effectiveness
+        sorted_bullets = sorted(
+            bullets, key=lambda b: (b.helpful - b.harmful, b.helpful), reverse=True
+        )
+
+        # Group by section
+        sections = self._group_by_section(bullets)
+
+        # Split into large (get own file) and small (stay inline)
+        large_sections = {
+            s: b for s, b in sections.items() if len(b) >= self.MIN_BULLETS_FOR_CATEGORY
+        }
+        small_sections = {
+            s: b for s, b in sections.items() if len(b) < self.MIN_BULLETS_FOR_CATEGORY
+        }
+
+        # Generate and save main SKILL.md
+        main_content = self.generate_main(
+            sorted_bullets, large_sections, small_sections
+        )
+        skill_path = self.skill_dir / "SKILL.md"
+        skill_path.write_text(main_content, encoding="utf-8")
         logger.info(f"Saved skill file to {skill_path}")
 
+        # Generate category files for large sections
+        if large_sections:
+            categories_dir = self.skill_dir / "categories"
+            categories_dir.mkdir(exist_ok=True)
+            for section, section_bullets in large_sections.items():
+                filename = section.replace("_", "-") + ".md"
+                cat_content = self.generate_category(section, section_bullets)
+                cat_path = categories_dir / filename
+                cat_path.write_text(cat_content, encoding="utf-8")
+                logger.info(f"Saved category file to {cat_path}")
+
         return skill_path
+
+    # Keep old generate() for backwards compatibility
+    def generate(self, playbook: Playbook) -> str:
+        """Generate SKILL.md content (legacy method, use save() for full feature)."""
+        bullets = playbook.bullets()
+        if not bullets:
+            return self._empty_skill()
+
+        sorted_bullets = sorted(
+            bullets, key=lambda b: (b.helpful - b.harmful, b.helpful), reverse=True
+        )
+        sections = self._group_by_section(bullets)
+
+        # For legacy generate(), put everything inline
+        return self.generate_main(sorted_bullets, {}, sections)
 
 
 # ============================================================================
