@@ -60,6 +60,63 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Project Root Detection
+# ============================================================================
+
+# Markers to identify project root (checked in order)
+DEFAULT_MARKERS = [
+    ".git",  # Version control (highest priority)
+    ".hg",
+    ".svn",
+    "pyproject.toml",  # Python modern
+    "package.json",  # Node.js
+    "Cargo.toml",  # Rust
+    "go.mod",  # Go
+]
+
+
+class NotInProjectError(Exception):
+    """Raised when no project root can be found."""
+
+    def __init__(self, searched_path: str):
+        self.searched_path = searched_path
+
+    def __str__(self):
+        return (
+            f"error: not in a project directory\n"
+            f"  searched from: {self.searched_path}\n"
+            f"  looking for: .git, pyproject.toml, package.json, etc.\n\n"
+            f"hint: run from within a project directory, or use\n"
+            f"      --project <path> to specify project root"
+        )
+
+
+def find_project_root(
+    start: Path, markers: Optional[List[str]] = None
+) -> Optional[Path]:
+    """
+    Find project root by walking up from start directory.
+
+    Args:
+        start: Directory to start searching from
+        markers: List of file/directory names that indicate project root
+
+    Returns:
+        Path to project root, or None if not found
+    """
+    markers = markers or DEFAULT_MARKERS
+    current = start.resolve()
+
+    while True:
+        for marker in markers:
+            if (current / marker).exists():
+                return current
+        if current.parent == current:  # Reached filesystem root
+            return None
+        current = current.parent
+
+
+# ============================================================================
 # Transcript Parser
 # ============================================================================
 
@@ -307,14 +364,41 @@ class TranscriptParser:
 # ============================================================================
 
 
+def get_project_skill_dir(cwd: str) -> Path:
+    """
+    Get the project-level skill directory for a given working directory.
+
+    Finds the project root by walking up from cwd, then returns
+    the skill directory path within that project.
+
+    Args:
+        cwd: Current working directory to start search from
+
+    Returns:
+        Path to skill directory: {project_root}/.claude/skills/ace-learnings/
+
+    Raises:
+        NotInProjectError: If no project root markers found
+    """
+    project_root = find_project_root(Path(cwd))
+    if project_root is None:
+        raise NotInProjectError(cwd)
+    return project_root / ".claude" / "skills" / "ace-learnings"
+
+
 class SkillGenerator:
     """Generate Claude Code skill files from ACE playbook with progressive disclosure."""
 
-    DEFAULT_SKILL_DIR = Path.home() / ".claude" / "skills" / "ace-learnings"
     MIN_BULLETS_FOR_CATEGORY = 3  # Only split sections with 3+ bullets
 
-    def __init__(self, skill_dir: Optional[Path] = None):
-        self.skill_dir = skill_dir or self.DEFAULT_SKILL_DIR
+    def __init__(self, skill_dir: Path):
+        """
+        Initialize the skill generator.
+
+        Args:
+            skill_dir: Directory to write skill files to (required, use get_project_skill_dir())
+        """
+        self.skill_dir = skill_dir
 
     def _group_by_section(self, bullets: List[Bullet]) -> Dict[str, List[Bullet]]:
         """Group bullets by section, sorted by effectiveness within each."""
@@ -331,13 +415,17 @@ class SkillGenerator:
         return sections
 
     def _frontmatter(self, sections: List[str]) -> str:
-        """Generate dynamic frontmatter based on actual sections."""
+        """Generate dynamic frontmatter based on actual sections.
+
+        Note: location is auto-determined by Claude Code based on filesystem path,
+        so we don't include it in frontmatter.
+        """
         if sections:
             # Take up to 6 sections for the description
             keywords = ", ".join(s.replace("_", " ") for s in sorted(sections)[:6])
-            desc = f"Learned coding strategies covering {keywords}. Use when writing code, debugging, testing, or implementing features."
+            desc = f"Project-specific coding patterns covering {keywords}. Use when writing code to follow established conventions."
         else:
-            desc = "Learned coding strategies from past sessions. Use when writing code, debugging, testing, or implementing features."
+            desc = "Project-specific patterns learned from coding sessions. Use when writing code to follow established conventions."
         return f"""---
 name: ace-learnings
 description: {desc}
@@ -531,16 +619,13 @@ class ACEHookLearner:
     Main class for learning from Claude Code sessions via hooks.
 
     Usage:
-        learner = ACEHookLearner()
+        learner = ACEHookLearner(cwd="/path/to/project")
         learner.learn_from_hook()  # Reads stdin, processes, updates skill
     """
 
-    # Store playbook in same directory as SKILL.md for portability
-    DEFAULT_SKILL_DIR = SkillGenerator.DEFAULT_SKILL_DIR
-    DEFAULT_PLAYBOOK_PATH = DEFAULT_SKILL_DIR / "playbook.json"
-
     def __init__(
         self,
+        cwd: str,
         playbook_path: Optional[Path] = None,
         skill_dir: Optional[Path] = None,
         ace_model: str = "anthropic/claude-sonnet-4-5-20250929",
@@ -550,18 +635,19 @@ class ACEHookLearner:
         Initialize the hook learner.
 
         Args:
-            playbook_path: Where to store the persistent playbook
-            skill_dir: Where to write the skill file
+            cwd: Working directory (project root) for skill storage
+            playbook_path: Where to store the persistent playbook (default: project/.claude/skills/ace-learnings/playbook.json)
+            skill_dir: Where to write the skill file (default: project/.claude/skills/ace-learnings/)
             ace_model: Model for ACE Reflector/Curator
             ace_llm: Custom LLM client (overrides ace_model)
         """
-        # Use skill_dir for both skill and playbook if provided
-        if skill_dir:
-            self.skill_generator = SkillGenerator(skill_dir)
-            self.playbook_path = playbook_path or (skill_dir / "playbook.json")
-        else:
-            self.skill_generator = SkillGenerator()
-            self.playbook_path = playbook_path or self.DEFAULT_PLAYBOOK_PATH
+        self.cwd = cwd
+
+        # Use project-level paths by default
+        project_skill_dir = skill_dir or get_project_skill_dir(cwd)
+        self.skill_dir = project_skill_dir
+        self.skill_generator = SkillGenerator(project_skill_dir)
+        self.playbook_path = playbook_path or (project_skill_dir / "playbook.json")
         self.transcript_parser = TranscriptParser()
 
         # Load or create playbook
@@ -613,38 +699,36 @@ class ACEHookLearner:
             progress=progress,
         )
 
-    def learn_from_hook(self) -> bool:
+    @classmethod
+    def learn_from_hook_input(
+        cls,
+        hook_input: Dict[str, Any],
+        ace_model: str = "anthropic/claude-sonnet-4-5-20250929",
+    ) -> bool:
         """
-        Process hook input from stdin and learn.
+        Process hook input and learn from the session.
 
-        Expected stdin JSON:
-        {
-            "session_id": "...",
-            "transcript_path": "/path/to/transcript.jsonl",
-            "cwd": "...",
-            "hook_event_name": "Stop"
-        }
+        Args:
+            hook_input: Parsed hook input containing transcript_path and cwd
+            ace_model: Model for ACE Reflector/Curator
 
         Returns:
             True if learning succeeded, False otherwise
         """
-        try:
-            # Read hook input from stdin
-            hook_input = json.load(sys.stdin)
-            transcript_path = hook_input.get("transcript_path")
+        transcript_path = hook_input.get("transcript_path")
+        cwd = hook_input.get("cwd")
 
-            if not transcript_path:
-                logger.error("No transcript_path in hook input")
-                return False
-
-            return self.learn_from_transcript(transcript_path)
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse hook input: {e}")
+        if not transcript_path:
+            logger.error("No transcript_path in hook input")
             return False
-        except Exception as e:
-            logger.error(f"Hook learning failed: {e}")
+
+        if not cwd:
+            logger.error("No cwd in hook input")
             return False
+
+        # Create learner with the project's cwd
+        learner = cls(cwd=cwd, ace_model=ace_model)
+        return learner.learn_from_transcript(transcript_path)
 
     def learn_from_transcript(self, transcript_path: str) -> bool:
         """
@@ -762,17 +846,17 @@ def setup_hook():
             "# ACE Framework Configuration\n# Add your Anthropic API key here\nANTHROPIC_API_KEY=your-key-here\n"
         )
 
-    skill_dir = ACEHookLearner.DEFAULT_SKILL_DIR
     print("✓ Claude Code hook configured!")
     print()
     print("Next steps:")
     print(f"  1. Add your API key to: {env_path}")
     print("  2. Start using Claude Code - it will learn from your sessions!")
     print()
-    print("Data locations:")
-    print(f"  Skill file:  {skill_dir / 'SKILL.md'}")
-    print(f"  Playbook:    {skill_dir / 'playbook.json'}")
+    print("Data locations (per-project):")
+    print("  Skill file:  <project>/.claude/skills/ace-learnings/SKILL.md")
+    print("  Playbook:    <project>/.claude/skills/ace-learnings/playbook.json")
     print()
+    print("Note: Skills are stored per-project. Run from within a project directory.")
     print(f"Settings saved to: {settings_path}")
 
     # Create slash commands for enable/disable
@@ -832,9 +916,43 @@ def disable_hook():
     print("ACE learning disabled")
 
 
-def show_insights():
+def get_project_context(args) -> Path:
+    """
+    Get project root with priority: flag > env > auto-detect.
+
+    Args:
+        args: Parsed argparse arguments (may have .project attribute)
+
+    Returns:
+        Path to project root
+
+    Raises:
+        NotInProjectError: If no project root can be found
+    """
+    # 1. Explicit --project flag
+    if hasattr(args, "project") and args.project:
+        return Path(args.project).resolve()
+
+    # 2. Environment variable (for CI/automation)
+    if env_dir := os.environ.get("ACE_PROJECT_DIR"):
+        return Path(env_dir).resolve()
+
+    # 3. Auto-detect from shell cwd
+    root = find_project_root(Path.cwd())
+    if root is None:
+        raise NotInProjectError(str(Path.cwd()))
+    return root
+
+
+def show_insights(args):
     """Show current ACE learned strategies."""
-    playbook_path = ACEHookLearner.DEFAULT_PLAYBOOK_PATH
+    try:
+        project_root = get_project_context(args)
+        skill_dir = get_project_skill_dir(str(project_root))
+        playbook_path = skill_dir / "playbook.json"
+    except NotInProjectError as e:
+        print(str(e), file=sys.stderr)
+        return
 
     if not playbook_path.exists():
         print("No insights yet. ACE will learn from your Claude Code sessions.")
@@ -850,7 +968,8 @@ def show_insights():
             print("No insights yet. ACE will learn from your Claude Code sessions.")
             return
 
-        print(f"ACE Learned Strategies ({len(bullets)} total):\n")
+        print(f"ACE Learned Strategies ({len(bullets)} total)")
+        print(f"Project: {project_root}\n")
 
         # Group by section
         sections: dict = {}
@@ -871,12 +990,18 @@ def show_insights():
         print(f"Error reading playbook: {e}")
 
 
-def remove_insight(insight_id: str):
+def remove_insight(args):
     """Remove a specific insight by ID."""
-    playbook_path = ACEHookLearner.DEFAULT_PLAYBOOK_PATH
+    try:
+        project_root = get_project_context(args)
+        skill_dir = get_project_skill_dir(str(project_root))
+        playbook_path = skill_dir / "playbook.json"
+    except NotInProjectError as e:
+        print(str(e), file=sys.stderr)
+        return
 
     if not playbook_path.exists():
-        print("No playbook found.")
+        print(f"No playbook found for project: {project_root}")
         return
 
     try:
@@ -885,6 +1010,7 @@ def remove_insight(insight_id: str):
         playbook = Playbook.load_from_file(str(playbook_path))
 
         # Find bullet by ID or partial match
+        insight_id = args.id
         bullets = playbook.bullets()
         target = None
         for b in bullets:
@@ -906,7 +1032,6 @@ def remove_insight(insight_id: str):
         playbook.save_to_file(str(playbook_path))
 
         # Regenerate skill file
-        skill_dir = ACEHookLearner.DEFAULT_SKILL_DIR
         generator = SkillGenerator(skill_dir)
         generator.save(playbook)
 
@@ -916,15 +1041,21 @@ def remove_insight(insight_id: str):
         print(f"Error removing insight: {e}")
 
 
-def clear_insights(confirm: bool = False):
+def clear_insights(args):
     """Clear all ACE learned strategies."""
-    if not confirm:
-        print("This will delete all learned strategies.")
+    if not args.confirm:
+        print("This will delete all learned strategies for this project.")
         print("Run with --confirm to proceed: ace-learn clear --confirm")
         return
 
-    playbook_path = ACEHookLearner.DEFAULT_PLAYBOOK_PATH
-    skill_path = ACEHookLearner.DEFAULT_SKILL_DIR / "SKILL.md"
+    try:
+        project_root = get_project_context(args)
+        skill_dir = get_project_skill_dir(str(project_root))
+        playbook_path = skill_dir / "playbook.json"
+        skill_path = skill_dir / "SKILL.md"
+    except NotInProjectError as e:
+        print(str(e), file=sys.stderr)
+        return
 
     try:
         from ..playbook import Playbook
@@ -934,11 +1065,11 @@ def clear_insights(confirm: bool = False):
         playbook.save_to_file(str(playbook_path))
 
         # Regenerate empty skill file
-        skill_dir = ACEHookLearner.DEFAULT_SKILL_DIR
         generator = SkillGenerator(skill_dir)
         generator.save(playbook)
 
-        print("All insights cleared. ACE will start fresh.")
+        print(f"All insights cleared for project: {project_root}")
+        print("ACE will start fresh.")
 
     except Exception as e:
         print(f"Error clearing insights: {e}")
@@ -1020,30 +1151,53 @@ This will reset the playbook and start fresh.
 
 
 def run_learning(args):
-    """Run the learning process (called from hook or manually)."""
-    # Fork to background unless --sync is specified
-    # This allows Claude Code to exit immediately without waiting for learning
-    if not args.sync and not args.transcript:
-        # Read stdin before forking (stdin won't be available in child)
-        try:
-            stdin_data = sys.stdin.read()
-        except Exception:
-            stdin_data = ""
+    """Run the learning process (called from hook or manually).
 
-        # Fork to background
+    Critical: stdin must be read BEFORE forking because daemonization
+    redirects stdin to /dev/null.
+    """
+    # STEP 1: Parse stdin BEFORE forking
+    hook_input = None
+    cwd = None
+    transcript_path = None
+
+    if args.transcript:
+        # Manual mode with explicit transcript file
+        cwd = getattr(args, "project", None) or os.getcwd()
+        transcript_path = args.transcript
+    else:
+        # Hook mode: read stdin first (critical - must happen before fork)
+        if sys.stdin.isatty():
+            print("error: no stdin input (expected hook JSON)", file=sys.stderr)
+            print("hint: use -t <transcript> for manual learning", file=sys.stderr)
+            sys.exit(1)
+        try:
+            hook_input = json.load(sys.stdin)
+        except json.JSONDecodeError as e:
+            print(f"error: invalid JSON from stdin: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        cwd = hook_input.get("cwd")
+        transcript_path = hook_input.get("transcript_path")
+
+        if not cwd:
+            print("error: missing 'cwd' in hook input", file=sys.stderr)
+            sys.exit(1)
+        if not transcript_path:
+            print("error: missing 'transcript_path' in hook input", file=sys.stderr)
+            sys.exit(1)
+
+    # STEP 2: Fork to background (stdin already consumed, safe now)
+    if not args.sync and not args.transcript:
         pid = os.fork()
         if pid > 0:
             # Parent exits immediately - Claude Code continues
             sys.exit(0)
 
         # Child continues with learning in background
-        # Detach from terminal
         os.setsid()
 
-        # Redirect stdin to the data we captured
-        sys.stdin = __import__("io").StringIO(stdin_data)
-
-    # Setup logging (to file in background mode)
+    # STEP 3: Setup logging (to file in background mode)
     log_file = None
     if not args.sync and not args.transcript:
         log_dir = Path.home() / ".ace" / "logs"
@@ -1056,18 +1210,21 @@ def run_learning(args):
         filename=str(log_file) if log_file else None,
     )
 
-    # Create learner
-    learner = ACEHookLearner(
-        playbook_path=Path(args.playbook),
-        skill_dir=Path(args.skill_dir),
-        ace_model=args.model,
-    )
-
-    # Learn from transcript or hook input
-    if args.transcript:
-        success = learner.learn_from_transcript(args.transcript)
-    else:
-        success = learner.learn_from_hook()
+    # STEP 4: Learn
+    try:
+        if hook_input:
+            # Use classmethod that creates learner with proper cwd
+            success = ACEHookLearner.learn_from_hook_input(
+                hook_input, ace_model=args.model
+            )
+        else:
+            # Manual transcript mode
+            learner = ACEHookLearner(cwd=cwd, ace_model=args.model)
+            success = learner.learn_from_transcript(transcript_path)
+    except NotInProjectError as e:
+        logger.error(str(e))
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
 
     sys.exit(0 if success else 1)
 
@@ -1089,6 +1246,9 @@ Examples:
   ace-learn clear --confirm    Clear all insights
   ace-learn                    Learn from stdin (called by hook)
   ace-learn -t transcript.jsonl   Learn from specific transcript
+  ace-learn -P /path/to/project   Override project root detection
+
+Skills are stored per-project at: <project>/.claude/skills/ace-learnings/
 """,
     )
 
@@ -1102,12 +1262,23 @@ Examples:
     subparsers.add_parser("disable", help="Disable ACE learning hook")
 
     # Insight management commands
-    subparsers.add_parser("insights", help="Show learned strategies")
+    insights_parser = subparsers.add_parser("insights", help="Show learned strategies")
+    insights_parser.add_argument(
+        "--project", "-P", help="Project root directory (default: auto-detect)"
+    )
+
     remove_parser = subparsers.add_parser("remove", help="Remove a specific insight")
     remove_parser.add_argument("id", help="Insight ID or keyword to match")
+    remove_parser.add_argument(
+        "--project", "-P", help="Project root directory (default: auto-detect)"
+    )
+
     clear_parser = subparsers.add_parser("clear", help="Clear all insights")
     clear_parser.add_argument(
         "--confirm", action="store_true", help="Confirm clearing all insights"
+    )
+    clear_parser.add_argument(
+        "--project", "-P", help="Project root directory (default: auto-detect)"
     )
 
     # Learning options (work without subcommand for backwards compat)
@@ -1115,16 +1286,7 @@ Examples:
         "--transcript", "-t", help="Path to transcript file (if not using stdin)"
     )
     parser.add_argument(
-        "--playbook",
-        "-p",
-        help="Path to playbook file",
-        default=str(ACEHookLearner.DEFAULT_PLAYBOOK_PATH),
-    )
-    parser.add_argument(
-        "--skill-dir",
-        "-s",
-        help="Directory for skill output",
-        default=str(SkillGenerator.DEFAULT_SKILL_DIR),
+        "--project", "-P", help="Project root directory (default: auto-detect from cwd)"
     )
     parser.add_argument(
         "--model",
@@ -1150,11 +1312,11 @@ Examples:
     elif args.command == "disable":
         disable_hook()
     elif args.command == "insights":
-        show_insights()
+        show_insights(args)
     elif args.command == "remove":
-        remove_insight(args.id)
+        remove_insight(args)
     elif args.command == "clear":
-        clear_insights(confirm=args.confirm)
+        clear_insights(args)
     else:
         # Default: run learning (backwards compat with hook calling ace-learn)
         run_learning(args)
