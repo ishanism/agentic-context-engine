@@ -194,7 +194,7 @@ Then add your Anthropic API key to `~/.ace/.env` and start coding! ACE learns au
 ace-learn setup       # Configure Claude Code hook
 ace-learn insights    # Show learned strategies
 ace-learn remove <id> # Remove insight by ID
-ace-learn clear       # Reset playbook
+ace-learn clear       # Reset skillbook
 ```
 
 **How it works:** ACE uses a Stop hook to analyze your sessions after each Claude response, extracting patterns about what works and what doesn't.
