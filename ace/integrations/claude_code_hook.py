@@ -387,9 +387,9 @@ def get_project_skill_dir(cwd: str) -> Path:
 
 
 class SkillGenerator:
-    """Generate Claude Code skill files from ACE playbook with progressive disclosure."""
+    """Generate Claude Code skill files from ACE skillbook with progressive disclosure."""
 
-    MIN_BULLETS_FOR_CATEGORY = 3  # Only split sections with 3+ bullets
+    MIN_SKILLS_FOR_CATEGORY = 3  # Only split sections with 3+ skills
 
     def __init__(self, skill_dir: Path):
         """
@@ -568,12 +568,12 @@ No strategies learned yet. Strategies will appear here as you use Claude Code.
         large_sections = {
             s: sk
             for s, sk in sections.items()
-            if len(sk) >= self.MIN_BULLETS_FOR_CATEGORY
+            if len(sk) >= self.MIN_SKILLS_FOR_CATEGORY
         }
         small_sections = {
             s: sk
             for s, sk in sections.items()
-            if len(sk) < self.MIN_BULLETS_FOR_CATEGORY
+            if len(sk) < self.MIN_SKILLS_FOR_CATEGORY
         }
 
         # Generate and save main SKILL.md
@@ -628,7 +628,7 @@ class ACEHookLearner:
     def __init__(
         self,
         cwd: str,
-        playbook_path: Optional[Path] = None,
+        skillbook_path: Optional[Path] = None,
         skill_dir: Optional[Path] = None,
         ace_model: str = "anthropic/claude-sonnet-4-5-20250929",
         ace_llm: Optional[LiteLLMClient] = None,
@@ -638,7 +638,7 @@ class ACEHookLearner:
 
         Args:
             cwd: Working directory (project root) for skill storage
-            playbook_path: Where to store the persistent skillbook (default: project/.claude/skills/ace-learnings/playbook.json)
+            skillbook_path: Where to store the persistent skillbook (default: project/.claude/skills/ace-learnings/playbook.json)
             skill_dir: Where to write the skill file (default: project/.claude/skills/ace-learnings/)
             ace_model: Model for ACE Reflector/SkillManager
             ace_llm: Custom LLM client (overrides ace_model)
@@ -649,7 +649,7 @@ class ACEHookLearner:
         project_skill_dir = skill_dir or get_project_skill_dir(cwd)
         self.skill_dir = project_skill_dir
         self.skill_generator = SkillGenerator(project_skill_dir)
-        self.skillbook_path = playbook_path or (project_skill_dir / "playbook.json")
+        self.skillbook_path = skillbook_path or (project_skill_dir / "playbook.json")
         self.transcript_parser = TranscriptParser()
 
         # Load or create skillbook
@@ -856,7 +856,7 @@ def setup_hook():
     print()
     print("Data locations (per-project):")
     print("  Skill file:  <project>/.claude/skills/ace-learnings/SKILL.md")
-    print("  Playbook:    <project>/.claude/skills/ace-learnings/playbook.json")
+    print("  Skillbook:   <project>/.claude/skills/ace-learnings/playbook.json")
     print()
     print("Note: Skills are stored per-project. Run from within a project directory.")
     print(f"Settings saved to: {settings_path}")
@@ -1090,7 +1090,7 @@ Run this command to enable ACE learning:
 ace-learn enable
 ```
 
-After enabling, ACE will learn from your coding sessions and build a playbook of strategies.
+After enabling, ACE will learn from your coding sessions and build a skillbook of strategies.
 """
     (commands_dir / "ace-on.md").write_text(ace_on_content)
 
@@ -1102,7 +1102,7 @@ Run this command to disable ACE learning:
 ace-learn disable
 ```
 
-This stops ACE from learning from your sessions. Your existing playbook is preserved.
+This stops ACE from learning from your sessions. Your existing skillbook is preserved.
 """
     (commands_dir / "ace-off.md").write_text(ace_off_content)
 
@@ -1114,7 +1114,7 @@ Run this command to see all learned insights:
 ace-learn insights
 ```
 
-Display the output to show the user their current playbook of strategies.
+Display the output to show the user their current skillbook of strategies.
 """
     (commands_dir / "ace-insights.md").write_text(ace_insights_content)
 
@@ -1147,7 +1147,7 @@ If confirmed, run:
 ace-learn clear --confirm
 ```
 
-This will reset the playbook and start fresh.
+This will reset the skillbook and start fresh.
 """
     (commands_dir / "ace-clear.md").write_text(ace_clear_content)
 
