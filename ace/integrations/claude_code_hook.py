@@ -638,7 +638,7 @@ class ACEHookLearner:
 
         Args:
             cwd: Working directory (project root) for skill storage
-            skillbook_path: Where to store the persistent skillbook (default: project/.claude/skills/ace-learnings/playbook.json)
+            skillbook_path: Where to store the persistent skillbook (default: project/.claude/skills/ace-learnings/skillbook.json)
             skill_dir: Where to write the skill file (default: project/.claude/skills/ace-learnings/)
             ace_model: Model for ACE Reflector/SkillManager
             ace_llm: Custom LLM client (overrides ace_model)
@@ -649,7 +649,7 @@ class ACEHookLearner:
         project_skill_dir = skill_dir or get_project_skill_dir(cwd)
         self.skill_dir = project_skill_dir
         self.skill_generator = SkillGenerator(project_skill_dir)
-        self.skillbook_path = skillbook_path or (project_skill_dir / "playbook.json")
+        self.skillbook_path = skillbook_path or (project_skill_dir / "skillbook.json")
         self.transcript_parser = TranscriptParser()
 
         # Load or create skillbook
@@ -856,7 +856,7 @@ def setup_hook():
     print()
     print("Data locations (per-project):")
     print("  Skill file:  <project>/.claude/skills/ace-learnings/SKILL.md")
-    print("  Skillbook:   <project>/.claude/skills/ace-learnings/playbook.json")
+    print("  Skillbook:   <project>/.claude/skills/ace-learnings/skillbook.json")
     print()
     print("Note: Skills are stored per-project. Run from within a project directory.")
     print(f"Settings saved to: {settings_path}")
@@ -951,7 +951,7 @@ def show_insights(args):
     try:
         project_root = get_project_context(args)
         skill_dir = get_project_skill_dir(str(project_root))
-        skillbook_path = skill_dir / "playbook.json"
+        skillbook_path = skill_dir / "skillbook.json"
     except NotInProjectError as e:
         print(str(e), file=sys.stderr)
         return
@@ -997,7 +997,7 @@ def remove_insight(args):
     try:
         project_root = get_project_context(args)
         skill_dir = get_project_skill_dir(str(project_root))
-        skillbook_path = skill_dir / "playbook.json"
+        skillbook_path = skill_dir / "skillbook.json"
     except NotInProjectError as e:
         print(str(e), file=sys.stderr)
         return
@@ -1053,7 +1053,7 @@ def clear_insights(args):
     try:
         project_root = get_project_context(args)
         skill_dir = get_project_skill_dir(str(project_root))
-        skillbook_path = skill_dir / "playbook.json"
+        skillbook_path = skill_dir / "skillbook.json"
         skill_path = skill_dir / "SKILL.md"
     except NotInProjectError as e:
         print(str(e), file=sys.stderr)
