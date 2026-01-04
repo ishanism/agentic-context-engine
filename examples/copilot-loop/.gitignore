@@ -1,0 +1,7 @@
+# Workspace for Copilot Loop
+workspace/
+.data/
+*.log
+*.pyc
+__pycache__/
+.DS_Store

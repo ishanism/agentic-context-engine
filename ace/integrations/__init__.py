@@ -9,6 +9,7 @@ Available Integrations:
     - browser-use: ACEAgent - Self-improving browser automation
     - LangChain: ACELangChain - Complex workflows with learning
     - Claude Code: ACEClaudeCode - Claude Code CLI with learning
+    - GitHub Copilot: ACECopilot - GitHub Copilot CLI with learning
 
 Pattern:
     All integrations follow the same pattern:
@@ -38,6 +39,12 @@ Example:
     # Claude Code
     from ace.integrations import ACEClaudeCode
     agent = ACEClaudeCode(working_dir="./my_project")
+    result = agent.run(task="Add unit tests")
+    agent.save_skillbook("learned.json")
+
+    # GitHub Copilot
+    from ace.integrations import ACECopilot
+    agent = ACECopilot(working_dir="./my_project")
     result = agent.run(task="Add unit tests")
     agent.save_skillbook("learned.json")
 """
@@ -71,13 +78,22 @@ except ImportError:
     ACEClaudeCode = None  # type: ignore
     CLAUDE_CODE_AVAILABLE = False
 
+# Import GitHub Copilot integration if available
+try:
+    from .copilot import ACECopilot, COPILOT_AVAILABLE
+except ImportError:
+    ACECopilot = None  # type: ignore
+    COPILOT_AVAILABLE = False
+
 __all__ = [
     "wrap_skillbook_context",
     "ACELiteLLM",
     "ACEAgent",
     "ACELangChain",
     "ACEClaudeCode",
+    "ACECopilot",
     "BROWSER_USE_AVAILABLE",
     "LANGCHAIN_AVAILABLE",
     "CLAUDE_CODE_AVAILABLE",
+    "COPILOT_AVAILABLE",
 ]
