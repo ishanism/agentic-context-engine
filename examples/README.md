@@ -32,6 +32,20 @@ Add ACE learning to existing systems:
 
 📖 See [langchain/README.md](langchain/README.md) for patterns
 
+### Claude Code Loop
+**[claude-code-loop/](claude-code-loop/)** - Claude Code CLI with learning
+
+Autonomous coding loops where Claude Code learns from each iteration.
+
+📖 See [claude-code-loop/README.md](claude-code-loop/README.md) for setup
+
+### GitHub Copilot Loop
+**[copilot-loop/](copilot-loop/)** - GitHub Copilot CLI with learning
+
+Autonomous coding loops where GitHub Copilot learns from each iteration.
+
+📖 See [copilot-loop/README.md](copilot-loop/README.md) for setup
+
 ### Custom Integration
 **[custom_integration_example.py](custom_integration_example.py)** - Pattern for any agent
 
@@ -64,6 +78,8 @@ Shows the three-step integration: Inject → Execute → Learn
 | Q&A systems | [simple_ace_example.py](simple_ace_example.py) |
 | Browser automation | [browser-use/](browser-use/) |
 | LangChain workflows | [langchain/](langchain/) |
+| Claude Code automation | [claude-code-loop/](claude-code-loop/) |
+| GitHub Copilot automation | [copilot-loop/](copilot-loop/) |
 | Custom agents | [custom_integration_example.py](custom_integration_example.py) |
 | Production learning | [helicone/](helicone/) |
 | Prompt optimization | [prompts/](prompts/) |

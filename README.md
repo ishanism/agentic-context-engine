@@ -171,6 +171,34 @@ agent = ACEClaudeCode(working_dir="./project", skillbook_path="coding_expert.jso
 
 </details>
 
+### 5. **ACECopilot** - GitHub Copilot CLI 🤖
+
+Self-improving coding agent using [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli):
+
+**Features:** GitHub Copilot CLI wrapper, automatic learning, command suggestions
+**[→ Copilot Loop Example](examples/copilot-loop/)**
+
+<details>
+<summary>Click to view code example</summary>
+
+```python
+from ace import ACECopilot
+
+agent = ACECopilot(
+    working_dir="./my_project",
+    ace_model="gpt-4o-mini"
+)
+
+# Execute coding tasks - agent learns from each
+result = agent.run(task="Create a REST API with Flask")
+agent.save_skillbook("copilot_expert.json")
+
+# Reuse learned knowledge
+agent = ACECopilot(working_dir="./project", skillbook_path="copilot_expert.json")
+```
+
+</details>
+
 ---
 
 ## Why Agentic Context Engine (ACE)?
@@ -239,6 +267,18 @@ Continuous autonomous coding: Claude Code runs a task, ACE learns from execution
 | 💰 API cost      | ~$1.5 (Sonnet for learning)          |
 
 **[→ Try it yourself](examples/claude-code-loop/)**
+
+### 🤖 GitHub Copilot Loop
+
+Continuous autonomous coding: GitHub Copilot CLI runs tasks, ACE learns from execution, skills get injected into the next iteration.
+
+**Self-Improving Command Suggestions:**
+- Uses GitHub Copilot CLI for code generation and command suggestions
+- ACE learns from successful/failed executions
+- Skills compound over iterations
+- Compatible with your existing GitHub Copilot subscription
+
+**[→ Try it yourself](examples/copilot-loop/)**
 
 ---
 
