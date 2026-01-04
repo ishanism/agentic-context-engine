@@ -121,6 +121,12 @@ python examples/langchain/simple_chain_example.py   # Basic chain wrapping
 python examples/langchain/agent_with_tools_example.py  # Agent with tools
 python examples/langchain/async_learning_example.py # Async learning
 
+# Claude Code integration
+python examples/claude-code-loop/ace_loop.py        # Claude Code learning loop
+
+# GitHub Copilot integration  
+python examples/copilot-loop/copilot_loop.py        # Copilot learning loop
+
 # Local models (LM Studio, Ollama)
 python examples/local-models/lm_studio_example.py
 python examples/local-models/ollama_starter_template.py
@@ -201,6 +207,7 @@ The ACE framework operates at three insight levels based on what scope the Refle
   - `base.py`: Base integration pattern and utilities
   - `browser_use.py`: ACEAgent - browser automation with learning
   - `claude_code.py`: ACEClaudeCode - Claude Code CLI with learning
+  - `copilot.py`: ACECopilot - GitHub Copilot CLI with learning
   - `langchain.py`: ACELangChain - wrap LangChain chains/agents
   - `litellm.py`: ACELiteLLM - simple conversational agent
 - `deduplication/`: Skill deduplication (similarity detection, consolidation)
@@ -225,6 +232,7 @@ The ACE framework operates at three insight levels based on what scope the Refle
 - `browser-use/` - Browser automation demos (domain-checker, form-filler, online-shopping)
 - `langchain/` - LangChain chain and agent examples
 - `claude-code-loop/` - Claude Code integration patterns
+- `copilot-loop/` - GitHub Copilot CLI integration patterns
 - `helicone/` - Helicone observability integration
 - `local-models/` - LM Studio and Ollama examples
 - `litellm/` - LiteLLM provider examples
